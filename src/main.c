@@ -23,6 +23,12 @@ static const Clay_Color COLOR_BG_LIGHT  = (Clay_Color) {90, 90, 90, 255};
 static const Clay_Color COLOR_WHITE     = (Clay_Color) {255, 255, 255, 255};
 static const Clay_Color COLOR_ACCENT    = (Clay_Color) {140, 140, 140, 255};
 
+typedef enum {
+    STATUS_IDLE,       // Never processed or failed
+    STATUS_ACTIVE,     // Currently processing
+    STATUS_COMPLETED   // Successfully completed
+} Status;
+
 typedef struct audio_track { // Ordered by size
     const char* selectedFile;
     float* beat_positions;
@@ -32,8 +38,7 @@ typedef struct audio_track { // Ordered by size
     SDL_Mutex* data_mutex;
     int beat_count;
     float processing_progress;
-    bool processing_complete;
-    bool is_processing;
+    Status status; // Replaces is_processing and processing_complete
 } AudioTrack;
 
 typedef struct app_state {
@@ -73,8 +78,7 @@ void process_audio_file(AudioTrack *track_state) {
         
         // Update state to indicate processing failed
         SDL_LockMutex(track_state->data_mutex);
-        track_state->processing_complete = false;
-        track_state->is_processing = false;
+        track_state->status = STATUS_IDLE;
         SDL_UnlockMutex(track_state->data_mutex);
         
         return;
@@ -91,8 +95,7 @@ void process_audio_file(AudioTrack *track_state) {
         
         // Update state to indicate processing failed
         SDL_LockMutex(track_state->data_mutex);
-        track_state->processing_complete = false;
-        track_state->is_processing = false;
+        track_state->status = STATUS_IDLE;
         SDL_UnlockMutex(track_state->data_mutex);
         
         return;
@@ -109,7 +112,7 @@ void process_audio_file(AudioTrack *track_state) {
     
     // Get file duration for progress calculation
     uint_t duration = aubio_source_get_duration(source);
-    uint_t total_frames = duration * samplerate / hop_size;
+    uint_t total_frames = duration / hop_size;
     uint_t frames_processed = 0;
     
     // Process the file
@@ -150,7 +153,7 @@ void process_audio_file(AudioTrack *track_state) {
     track_state->out_fvec = out_fvec;
     track_state->beat_positions = beat_positions;
     track_state->beat_count = beat_count;
-    track_state->processing_complete = true;
+    track_state->status = STATUS_COMPLETED;
     track_state->processing_progress = 1.0f;
     SDL_UnlockMutex(track_state->data_mutex);
     
@@ -170,9 +173,11 @@ int audio_processing_thread(void *data) {
     // Process the audio file
     process_audio_file(track_state);
     
-    // Update processing state
+    // Update processing state if not already completed (in case of error)
     SDL_LockMutex(track_state->data_mutex);
-    track_state->is_processing = false;
+    if (track_state->status == STATUS_ACTIVE) {
+        track_state->status = STATUS_IDLE;
+    }
     SDL_UnlockMutex(track_state->data_mutex);
     
     return 0;
@@ -197,11 +202,16 @@ void handleFileSelection(Clay_ElementId elementId, Clay_PointerData pointerData,
         
         // If already processing, don't start another thread
         SDL_LockMutex(track_state->data_mutex);
-        if (track_state->is_processing) {
+        if (track_state->status == STATUS_ACTIVE) {
             SDL_UnlockMutex(track_state->data_mutex);
             return;
         }
         SDL_UnlockMutex(track_state->data_mutex);
+
+        if (track_state->processing_thread) {
+            SDL_WaitThread(track_state->processing_thread, NULL);
+            track_state->processing_thread = NULL;
+        }
         
         const char *filterPatterns[] = { "*.wav", "*.mp3" };
         track_state->selectedFile = tinyfd_openFileDialog(
@@ -216,9 +226,8 @@ void handleFileSelection(Clay_ElementId elementId, Clay_PointerData pointerData,
         if (track_state->selectedFile) {
             // Initialize processing state
             SDL_LockMutex(track_state->data_mutex);
-            track_state->processing_complete = false;
             track_state->beat_count = 0;
-            track_state->is_processing = true;
+            track_state->status = STATUS_ACTIVE;
             track_state->processing_progress = 0.0f;
             SDL_UnlockMutex(track_state->data_mutex);
             
@@ -234,7 +243,7 @@ void handleFileSelection(Clay_ElementId elementId, Clay_PointerData pointerData,
                 
                 // Reset processing state
                 SDL_LockMutex(track_state->data_mutex);
-                track_state->is_processing = false;
+                track_state->status = STATUS_IDLE;
                 SDL_UnlockMutex(track_state->data_mutex);
             }
         }
@@ -521,17 +530,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
             
             // Display processing status
             SDL_LockMutex(track_state->data_mutex);
-            bool is_processing = track_state->is_processing;
+            Status status = track_state->status;
             float progress = track_state->processing_progress;
-            bool processing_complete = track_state->processing_complete;
             int beat_count = track_state->beat_count;
             SDL_UnlockMutex(track_state->data_mutex);
-            
-            if (is_processing) {
+
+            if (status == STATUS_ACTIVE) {
                 // Show processing status
                 char progress_text[64];
                 snprintf(progress_text, sizeof(progress_text), 
-                         "Processing audio file... %.0f%%", progress * 10000.0f);
+                         "Processing audio file... %.0f%%", progress * 100.0f);
                 Clay_String progress_str = { .length = strlen(progress_text), .chars = progress_text };
                 CLAY_TEXT(progress_str, CLAY_TEXT_CONFIG({
                         .fontId = FONT_REGULAR,
@@ -553,14 +561,14 @@ SDL_AppResult SDL_AppIterate(void *appstate)
                     CLAY({
                         .layout = {
                             .sizing = {
-                                .width = CLAY_SIZING_PERCENT(progress * 100.0f),
+                                .width = CLAY_SIZING_PERCENT(progress),
                                 .height = CLAY_SIZING_GROW(0)
                             }
                         },
                         .backgroundColor = COLOR_ACCENT
                     }) {}
                 }
-            } else if (processing_complete && track_state->selectedFile) {
+            } else if (status == STATUS_COMPLETED && track_state->selectedFile) {
                 // Show results
                 char result_text[256];
                 snprintf(result_text, sizeof(result_text), 
