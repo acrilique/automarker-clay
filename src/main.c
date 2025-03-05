@@ -42,11 +42,20 @@ typedef struct audio_track { // Ordered by size
 } AudioTrack;
 
 typedef struct app_state {
-    SDL_Window *window; // I do manually need to call a set of functions on app exit to free this
-    Clay_SDL3RendererData rendererData; // And this
+    SDL_Window *window;
+    SDL_Surface *play_icon;
+    SDL_Surface *follow_icon;
+    SDL_Surface *send_icon;
+    SDL_Surface *remove_icon;
 
+    Clay_SDL3RendererData rendererData;
     AudioTrack audio_track;
 } AppState;
+
+static struct {
+    bool visible;
+    int x, y;
+} context_menu;
 
 // Process audio file to detect beats
 void process_audio_file(AudioTrack *track_state) {
@@ -304,6 +313,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Clay_Initialize(clayMemory, (Clay_Dimensions) { (float) width, (float) height }, (Clay_ErrorHandler) { HandleClayErrors });
     Clay_SetMeasureTextFunction(SDL_MeasureText, state->rendererData.fonts);
 
+    state->play_icon = IMG_Load("resources/play_pause.svg");
+    state->follow_icon = IMG_Load("resources/follow.svg");
+    state->send_icon = IMG_Load("resources/send.svg");
+    state->remove_icon = IMG_Load("resources/remove.svg");
+
     state->audio_track.data_mutex = SDL_CreateMutex();
 
     *appstate = state;
@@ -328,6 +342,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             Clay_SetPointerState((Clay_Vector2) { event->button.x, event->button.y },
                                  event->button.button == SDL_BUTTON_LEFT);
+            if (event->button.button == SDL_BUTTON_RIGHT) {
+                context_menu.x = event->button.x;
+                context_menu.y = event->button.y;
+                context_menu.visible = true;
+            } else context_menu.visible = false;
             break;
         case SDL_EVENT_MOUSE_WHEEL:
             Clay_UpdateScrollContainers(true, (Clay_Vector2) { event->wheel.x, event->wheel.y }, 0.01f);
@@ -361,6 +380,42 @@ SDL_AppResult SDL_AppIterate(void *appstate)
             .childGap = 16
         }
     }) {
+        if (context_menu.visible) {
+            CLAY({
+                .floating = {
+                    .attachTo = CLAY_ATTACH_TO_PARENT,
+                    .attachPoints = {
+                        .parent = CLAY_ATTACH_POINT_LEFT_TOP
+                    },
+                    .offset = { context_menu.x, context_menu.y }
+                },
+                .layout = {
+                    .padding = CLAY_PADDING_ALL(8)
+                },
+                .backgroundColor = COLOR_BG_LIGHT,
+                .cornerRadius = CLAY_CORNER_RADIUS(8)
+            }) {
+                CLAY({
+                    .layout = {
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM
+                    },
+                    .backgroundColor = COLOR_BG_DARK,
+                    .cornerRadius = CLAY_CORNER_RADIUS(8)
+                }) {
+                    CLAY({
+                        .layout = { .padding = CLAY_PADDING_ALL(16) },
+                        .backgroundColor = Clay_Hovered() ? COLOR_ACCENT : COLOR_BG_DARK
+                    }) {
+                        CLAY_TEXT(CLAY_STRING("Option 1"), CLAY_TEXT_CONFIG({
+                            .fontId = FONT_REGULAR,
+                            .fontSize = 16,
+                            .textColor = COLOR_WHITE
+                        }));
+                    }
+                }
+            }
+        }
+
         // Header bar
         CLAY({ 
             .id = CLAY_ID("HeaderBar"),
@@ -419,9 +474,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
                         CLAY({
                             .layout = {
                                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                .sizing = {
-                                    .width = CLAY_SIZING_FIXED(200)
-                                },
                             },
                             .backgroundColor = COLOR_BG_DARK,
                             .cornerRadius = CLAY_CORNER_RADIUS(8)
@@ -482,10 +534,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
                     }) {
                         CLAY({
                             .layout = {
-                                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                .sizing = {
-                                    .width = CLAY_SIZING_FIT()
-                                },
+                                .layoutDirection = CLAY_TOP_TO_BOTTOM
                             },
                             .backgroundColor = COLOR_BG_DARK,
                             .cornerRadius = CLAY_CORNER_RADIUS(8)
@@ -511,75 +560,196 @@ SDL_AppResult SDL_AppIterate(void *appstate)
             .id = CLAY_ID("MainContent"),
             .backgroundColor = COLOR_BG_LIGHT,
             .layout = {
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
                 .sizing = layoutExpand,
                 .padding = CLAY_PADDING_ALL(16),
                 .childGap = 16
             },
             .cornerRadius = CLAY_CORNER_RADIUS(8)
         }) {
-            AudioTrack *track_state = &state->audio_track;
-            // Display file path or default message
-            const char* text = track_state->selectedFile ? track_state->selectedFile : "Select an audio file to begin";
-            Clay_String str = { .length = strlen(text), .chars = text };
-            CLAY_TEXT(str, CLAY_TEXT_CONFIG({
-                    .fontId = FONT_REGULAR,
-                    .fontSize = 16,
-                    .textColor = COLOR_WHITE
-                }));
-            
-            // Display processing status
-            SDL_LockMutex(track_state->data_mutex);
-            Status status = track_state->status;
-            float progress = track_state->processing_progress;
-            int beat_count = track_state->beat_count;
-            SDL_UnlockMutex(track_state->data_mutex);
-
-            if (status == STATUS_ACTIVE) {
-                // Show processing status
-                char progress_text[64];
-                snprintf(progress_text, sizeof(progress_text), 
-                         "Processing audio file... %.0f%%", progress * 100.0f);
-                Clay_String progress_str = { .length = strlen(progress_text), .chars = progress_text };
-                CLAY_TEXT(progress_str, CLAY_TEXT_CONFIG({
-                        .fontId = FONT_REGULAR,
-                        .fontSize = 16,
-                        .textColor = COLOR_WHITE
-                    }));
-                
-                // Progress bar
+            CLAY({
+                .id = CLAY_ID("LeftColumn"),
+                .backgroundColor = COLOR_BG_DARK,
+                .layout = {
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .padding = CLAY_PADDING_ALL(16),
+                    .childGap = 16
+                },
+                .cornerRadius = CLAY_CORNER_RADIUS(8)
+            }) {
                 CLAY({
+                    .id = CLAY_ID("MainButtons"),
+                    .backgroundColor = COLOR_BG_LIGHT,
                     .layout = {
+                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                        .padding = CLAY_PADDING_ALL(16),
+                        .childGap = 16,
                         .sizing = {
                             .width = CLAY_SIZING_GROW(0),
-                            .height = CLAY_SIZING_FIXED(20)
+                            .height = CLAY_SIZING_FIXED(80)
                         }
                     },
-                    .backgroundColor = COLOR_BG_DARK,
-                    .cornerRadius = CLAY_CORNER_RADIUS(4)
-                }) {
+                    .cornerRadius = CLAY_CORNER_RADIUS(8)
+                }) { // Four buttons, each with a fixed width
                     CLAY({
-                        .layout = {
-                            .sizing = {
-                                .width = CLAY_SIZING_PERCENT(progress),
-                                .height = CLAY_SIZING_GROW(0)
+                        .id = CLAY_ID("PlayButton"),
+                        .backgroundColor = COLOR_ACCENT,
+                        .cornerRadius = CLAY_CORNER_RADIUS(5),
+                    }) { 
+                        CLAY({
+                            .id = CLAY_ID("PlayIcon"),
+                            .layout = {
+                                .sizing = {
+                                    .width = CLAY_SIZING_FIXED(50),
+                                    .height = CLAY_SIZING_GROW(0)
+                                }
+                            },
+                            .image = {
+                                .imageData = state->play_icon,
+                                .sourceDimensions = { 80, 80 },
                             }
-                        },
-                        .backgroundColor = COLOR_ACCENT
-                    }) {}
+                        });
+                    }
+
+                    CLAY({
+                        .id = CLAY_ID("FollowButton"),
+                        .backgroundColor = COLOR_ACCENT,
+                        .cornerRadius = CLAY_CORNER_RADIUS(5),
+                    }) { 
+                        CLAY({
+                            .id = CLAY_ID("FollowIcon"),
+                            .layout = {
+                                .sizing = {
+                                    .width = CLAY_SIZING_FIXED(50),
+                                    .height = CLAY_SIZING_GROW(0)
+                                }
+                            },
+                            .image = {
+                                .imageData = state->follow_icon,
+                                .sourceDimensions = { 80, 80 },
+                            }
+                        });
+                    }
+
+                    CLAY({
+                        .id = CLAY_ID("SendButton"),
+                        .backgroundColor = COLOR_ACCENT,
+                        .cornerRadius = CLAY_CORNER_RADIUS(5),
+                    }) { 
+                        CLAY({
+                            .id = CLAY_ID("SendIcon"),
+                            .layout = {
+                                .sizing = {
+                                    .width = CLAY_SIZING_FIXED(50),
+                                    .height = CLAY_SIZING_GROW(0)
+                                }
+                            },
+                            .image = {
+                                .imageData = state->send_icon,
+                                .sourceDimensions = { 80, 80 },
+                            }
+                        });
+                    }
+
+                    CLAY({
+                        .id = CLAY_ID("RemoveButton"),
+                        .backgroundColor = COLOR_ACCENT,
+                        .cornerRadius = CLAY_CORNER_RADIUS(5),
+                    }) { 
+                        CLAY({
+                            .id = CLAY_ID("RemoveIcon"),
+                            .layout = {
+                                .sizing = {
+                                    .width = CLAY_SIZING_FIXED(50),
+                                    .height = CLAY_SIZING_GROW(0)
+                                }
+                            },
+                            .image = {
+                                .imageData = state->remove_icon,
+                                .sourceDimensions = { 80, 80 },
+                            }
+                        });
+                    }
                 }
-            } else if (status == STATUS_COMPLETED && track_state->selectedFile) {
-                // Show results
-                char result_text[256];
-                snprintf(result_text, sizeof(result_text), 
-                         "Detected %d beats in the audio file", beat_count);
-                Clay_String result_str = { .length = strlen(result_text), .chars = result_text };
-                CLAY_TEXT(result_str, CLAY_TEXT_CONFIG({
-                        .fontId = FONT_REGULAR,
-                        .fontSize = 16,
-                        .textColor = COLOR_WHITE
-                    }));
             }
+
+            CLAY({
+                .id = CLAY_ID("RightColumn"),
+                .backgroundColor = COLOR_BG_DARK,
+                .layout = {
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .sizing = {
+                        .width = CLAY_SIZING_GROW(0),
+                        .height = CLAY_SIZING_GROW(0)
+                    },
+                    .padding = CLAY_PADDING_ALL(16),
+                    .childGap = 16
+                },
+                .cornerRadius = CLAY_CORNER_RADIUS(8)
+            }) {}
+
+            // AudioTrack *track_state = &state->audio_track;
+            // // Display file path or default message
+            // const char* text = track_state->selectedFile ? track_state->selectedFile : "Select an audio file to begin";
+            // Clay_String str = { .length = strlen(text), .chars = text };
+            // CLAY_TEXT(str, CLAY_TEXT_CONFIG({
+            //         .fontId = FONT_REGULAR,
+            //         .fontSize = 16,
+            //         .textColor = COLOR_WHITE
+            //     }));
+            //
+            // // Display processing status
+            // SDL_LockMutex(track_state->data_mutex);
+            // Status status = track_state->status;
+            // float progress = track_state->processing_progress;
+            // int beat_count = track_state->beat_count;
+            // SDL_UnlockMutex(track_state->data_mutex);
+            //
+            // if (status == STATUS_ACTIVE) {
+            //     // Show processing status
+            //     char progress_text[64];
+            //     snprintf(progress_text, sizeof(progress_text), 
+            //              "Processing audio file... %.0f%%", progress * 100.0f);
+            //     Clay_String progress_str = { .length = strlen(progress_text), .chars = progress_text };
+            //     CLAY_TEXT(progress_str, CLAY_TEXT_CONFIG({
+            //             .fontId = FONT_REGULAR,
+            //             .fontSize = 16,
+            //             .textColor = COLOR_WHITE
+            //         }));
+            //    
+            //     // Progress bar
+            //     CLAY({
+            //         .layout = {
+            //             .sizing = {
+            //                 .width = CLAY_SIZING_GROW(0),
+            //                 .height = CLAY_SIZING_FIXED(20)
+            //             }
+            //         },
+            //         .backgroundColor = COLOR_BG_DARK,
+            //         .cornerRadius = CLAY_CORNER_RADIUS(4)
+            //     }) {
+            //         CLAY({
+            //             .layout = {
+            //                 .sizing = {
+            //                     .width = CLAY_SIZING_PERCENT(progress),
+            //                     .height = CLAY_SIZING_GROW(0)
+            //                 }
+            //             },
+            //             .backgroundColor = COLOR_ACCENT
+            //         }) {}
+            //     }
+            // } else if (status == STATUS_COMPLETED && track_state->selectedFile) {
+            //     // Show results
+            //     char result_text[256];
+            //     snprintf(result_text, sizeof(result_text), 
+            //              "Detected %d beats in the audio file", beat_count);
+            //     Clay_String result_str = { .length = strlen(result_text), .chars = result_text };
+            //     CLAY_TEXT(result_str, CLAY_TEXT_CONFIG({
+            //             .fontId = FONT_REGULAR,
+            //             .fontSize = 16,
+            //             .textColor = COLOR_WHITE
+            //         }));
+            // }
         }
     }
 
