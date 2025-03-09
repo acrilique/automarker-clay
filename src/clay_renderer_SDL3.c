@@ -1,14 +1,107 @@
-#include "clay.h"
+#include "../libs/clay.h"
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3_image/SDL_image.h>
+#include <math.h>
+
+// Waveform data structure
+typedef struct {
+    float* samples;      // Audio samples
+    int sampleCount;     // Number of samples
+    float currentZoom;   // Zoom level (1.0 = normal)
+    float currentScroll; // Scroll position (0.0 = start)
+    Clay_Color lineColor; // Color of the waveform line
+} WaveformData;
+
 
 typedef struct {
     SDL_Renderer *renderer;
     TTF_TextEngine *textEngine;
     TTF_Font **fonts;
 } Clay_SDL3RendererData;
+
+// Function to draw a waveform
+static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, WaveformData *data) {
+    // If no data or samples, draw a placeholder
+    if (!data || !data->samples || data->sampleCount <= 0) {
+        // Draw a placeholder line to indicate no data
+        SDL_SetRenderDrawColor(rendererData->renderer, 255, 0, 0, 255); // Red color for placeholder
+        const float centerY = rect.y + rect.h / 2.0f;
+        SDL_RenderLine(rendererData->renderer, rect.x, centerY, rect.x + rect.w, centerY);
+        return;
+    }
+    
+    // Set drawing color
+    SDL_SetRenderDrawColor(rendererData->renderer, 
+                          data->lineColor.r, 
+                          data->lineColor.g, 
+                          data->lineColor.b, 
+                          data->lineColor.a);
+    
+    // Calculate drawing parameters
+    const int width = rect.w;
+    const int height = rect.h;
+    const float centerY = rect.y + height / 2.0f;
+    
+    // Draw center line for reference
+    SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 100, 255); // Gray color for center line
+    SDL_RenderLine(rendererData->renderer, rect.x, centerY, rect.x + width, centerY);
+    
+    // Restore waveform color
+    SDL_SetRenderDrawColor(rendererData->renderer, 
+                          data->lineColor.r, 
+                          data->lineColor.g, 
+                          data->lineColor.b, 
+                          data->lineColor.a);
+    
+    // Calculate visible range of samples based on zoom and scroll
+    // Invert the zoom logic: higher zoom = fewer visible samples (zoomed in)
+    int visibleSamples = (int)(data->sampleCount / data->currentZoom);
+    
+    // Calculate the start sample based on scroll position and visible range
+    // This ensures the scroll position is relative to the zoomed view
+    int maxStartSample = data->sampleCount - visibleSamples;
+    int startSample = (maxStartSample > 0) ? (int)(data->currentScroll * maxStartSample) : 0;
+    
+    // Ensure we're within bounds
+    if (startSample < 0) startSample = 0;
+    if (visibleSamples > data->sampleCount) visibleSamples = data->sampleCount;
+    if (startSample + visibleSamples > data->sampleCount) {
+        visibleSamples = data->sampleCount - startSample;
+    }
+    
+    // Find max amplitude in visible range to normalize display
+    float maxAmplitude = 0.01f; // Small non-zero value to avoid division by zero
+    for (int i = 0; i < visibleSamples; i++) {
+        int sampleIndex = startSample + i;
+        if (sampleIndex < data->sampleCount) {
+            float amplitude = fabsf(data->samples[sampleIndex]);
+            if (amplitude > maxAmplitude) maxAmplitude = amplitude;
+        }
+    }
+    
+    // Draw waveform with improved visualization
+    for (int x = 0; x < width; x++) {
+        // Map x position to sample index
+        float samplePos = (float)x / width * visibleSamples;
+        int sampleIndex = startSample + (int)samplePos;
+        
+        // Ensure we're within bounds
+        if (sampleIndex >= 0 && sampleIndex < data->sampleCount) {
+            // Get sample value and normalize it
+            float sampleValue = data->samples[sampleIndex];
+            
+            // Scale to pixel height (normalize by max amplitude)
+            float lineHeight = (sampleValue / maxAmplitude) * (height / 2.0f);
+            
+            // Draw vertical line representing the sample
+            SDL_RenderLine(rendererData->renderer, 
+                          rect.x + x, centerY, 
+                          rect.x + x, centerY - lineHeight);
+        }
+    }
+}
 
 /* Global for convenience. Even in 4K this is enough for smooth curves (low radius or rect size coupled with
  * no AA or low resolution might make it appear as jagged curves) */
@@ -257,6 +350,17 @@ static void SDL_Clay_RenderClayCommands(Clay_SDL3RendererData *rendererData, Cla
 
                 SDL_RenderTexture(rendererData->renderer, texture, NULL, &dest);
                 SDL_DestroyTexture(texture);
+                break;
+            }
+            case CLAY_RENDER_COMMAND_TYPE_CUSTOM: {
+                Clay_CustomRenderData *config = &rcmd->renderData.custom;
+                
+                // Check if this is a waveform
+                WaveformData *waveformData = (WaveformData*)config->customData;
+                if (waveformData) {
+                    // Draw the waveform
+                    DrawWaveform(rendererData, rect, waveformData);
+                }
                 break;
             }
             default:
