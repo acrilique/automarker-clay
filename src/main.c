@@ -8,7 +8,7 @@
 #include "../libs/tinyfiledialogs.h"
 
 #define CLAY_IMPLEMENTATION
-#include "../libs/clay.h"
+#include "../libs/clay/clay.h"
 
 #include "./clay_renderer_SDL3.c"
 
