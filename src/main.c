@@ -12,7 +12,7 @@
 
 #include "./clay_renderer_SDL3.c"
 
-#include "aubio.h"
+#include "aubio.h" // IWYU pragma: keep
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
