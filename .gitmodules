@@ -1,6 +1,3 @@
-[submodule "libs/aubio"]
-	path = libs/aubio
-	url = https://github.com/aubio/aubio
 [submodule "libs/SDL"]
 	path = libs/SDL
 	url = https://github.com/libsdl-org/SDL
@@ -13,3 +10,6 @@
 [submodule "libs/clay"]
 	path = libs/clay
 	url = https://github.com/nicbarker/clay
+[submodule "libs/BTT"]
+	path = libs/BTT
+	url = https://github.com/michaelkrzyzaniak/Beat-and-Tempo-Tracking.git

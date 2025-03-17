@@ -1,6 +1,7 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <SDL3_sound/SDL_sound.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include <stdio.h>
@@ -12,7 +13,7 @@
 
 #include "./clay_renderer_SDL3.c"
 
-#include "aubio.h" // IWYU pragma: keep
+#include "../libs/BTT/BTT.h"
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
@@ -34,31 +35,38 @@ static const Clay_Color COLOR_BUTTON_SVG = (Clay_Color){255, 255, 255, 255};
 // Waveform colors
 static const Clay_Color COLOR_WAVEFORM_BG = (Clay_Color){60, 60, 60, 255};
 static const Clay_Color COLOR_WAVEFORM_LINE = (Clay_Color){255, 255, 255, 255};
+static const Clay_Color COLOR_WAVEFORM_BEAT =
+    (Clay_Color){255, 255, 0, 255}; // Yellow color for beat markers
+
+static Sound_AudioInfo desired = {
+    .format = SDL_AUDIO_F32,
+    .channels = 1,
+    .rate = 44100,
+};
 
 typedef enum _status {
-  STATUS_IDLE,     // Never processed or failed
-  STATUS_ACTIVE,   // Currently processing
+  STATUS_IDLE, // Never processed or failed
+  STATUS_DECODE,
+  STATUS_BEAT_ANALYSIS,
   STATUS_COMPLETED // Successfully completed
 } Status;
 
 typedef struct audio_track { // Ordered by size
   const char *selectedFile;
-  float *beat_positions;
-  float *all_samples;       // All audio samples for waveform display
-  fvec_t *in_fvec;          // Audio samples (processing buffer)
-  fvec_t *out_fvec;         // Beat detection result
+  uint *beat_positions; // Beat positions in samples
+  Sound_Sample *sample; // Represents the current audio file in SDL_sound
   SDL_Thread *processing_thread;
   SDL_Mutex *data_mutex;
   int beat_count;
-  int total_samples;        // Total number of samples in all_samples
+  int beats_buffer_size;
   float processing_progress;
   Status status; // Replaces is_processing and processing_complete
 } AudioTrack;
 
 // Waveform display state
 typedef struct {
-  float zoom;         // Zoom level (1.0 = normal)
-  float scroll;       // Scroll position (0.0 = start, 1.0 = end)
+  float zoom;   // Zoom level (1.0 = normal)
+  float scroll; // Scroll position (0.0 = start, 1.0 = end)
 } WaveformViewState;
 
 typedef struct app_state {
@@ -79,164 +87,95 @@ static struct {
   int x, y;
 } context_menu;
 
+void beat_callback(void *user_data, unsigned long long sample_time) {
+  AudioTrack *track_state = (AudioTrack *)user_data;
+
+  SDL_LockMutex(track_state->data_mutex);
+  if (track_state->beat_count < track_state->beats_buffer_size) {
+    track_state->beat_positions[track_state->beat_count++] = sample_time;
+  } else {
+    track_state->beats_buffer_size *= 2;
+    track_state->beat_positions =
+        realloc(track_state->beat_positions,
+                sizeof(uint) * track_state->beats_buffer_size);
+    track_state->beat_positions[track_state->beat_count++] = sample_time;
+  }
+  SDL_UnlockMutex(track_state->data_mutex);
+}
+
 // Process audio file to detect beats
 static void process_audio_file(AudioTrack *track_state) {
-  // Initialize aubio objects
-  uint_t win_size = 1024;
-  uint_t hop_size = 512;
-  uint_t samplerate = 0; // Will be set by aubio_source
-
   // Clean up previous processing if any - protected by mutex
   SDL_LockMutex(track_state->data_mutex);
-  if (track_state->in_fvec) {
-    del_fvec(track_state->in_fvec);
-    track_state->in_fvec = NULL;
-  }
-  if (track_state->out_fvec) {
-    del_fvec(track_state->out_fvec);
-    track_state->out_fvec = NULL;
+  if (track_state->sample) {
+    Sound_FreeSample(track_state->sample);
+    track_state->sample = NULL;
   }
   if (track_state->beat_positions) {
     free(track_state->beat_positions);
     track_state->beat_positions = NULL;
   }
-  if (track_state->all_samples) {
-    free(track_state->all_samples);
-    track_state->all_samples = NULL;
-  }
-  track_state->total_samples = 0;
+  track_state->beats_buffer_size = 1024;
+  track_state->beat_positions =
+      malloc(sizeof(uint) * track_state->beats_buffer_size);
+  track_state->beat_count = 0;
+  track_state->status = STATUS_DECODE;
   SDL_UnlockMutex(track_state->data_mutex);
 
-  // Create source
-  aubio_source_t *source =
-      new_aubio_source(track_state->selectedFile, samplerate, hop_size);
-  if (!source) {
+  // Initial file setup
+  track_state->sample =
+      Sound_NewSampleFromFile(track_state->selectedFile, &desired, 16384);
+  if (!track_state->sample) {
     printf("Error: Could not open audio file: %s\n", track_state->selectedFile);
-
-    // Update state to indicate processing failed
-    SDL_LockMutex(track_state->data_mutex);
-    track_state->status = STATUS_IDLE;
-    SDL_UnlockMutex(track_state->data_mutex);
-
     return;
   }
 
-  // Get actual samplerate
-  samplerate = aubio_source_get_samplerate(source);
-
-  // Create tempo detection object
-  aubio_tempo_t *tempo =
-      new_aubio_tempo("default", win_size, hop_size, samplerate);
-  if (!tempo) {
-    printf("Error: Could not create tempo detection object\n");
-    del_aubio_source(source);
-
-    // Update state to indicate processing failed
-    SDL_LockMutex(track_state->data_mutex);
-    track_state->status = STATUS_IDLE;
-    SDL_UnlockMutex(track_state->data_mutex);
-
+  // File decoding
+  Uint32 decoded_bytes = Sound_DecodeAll(track_state->sample);
+  if (decoded_bytes == 0) {
+    printf("Error: Could not decode audio file: %s\n",
+           track_state->selectedFile);
+    Sound_FreeSample(track_state->sample);
+    track_state->sample = NULL;
     return;
   }
 
-  // Create input/output vectors
-  fvec_t *in_fvec = new_fvec(hop_size);
-  fvec_t *out_fvec = new_fvec(1);
-
-  // Initialize beat positions storage
-  int beat_capacity = 1000; // Initial capacity
-  float *beat_positions = malloc(beat_capacity * sizeof(float));
-  int beat_count = 0;
-
-  // Get file duration for progress calculation
-  uint_t duration = aubio_source_get_duration(source);
-  uint_t total_frames = duration / hop_size;
-  uint_t frames_processed = 0;
-
-  uint_t read = 0;
-
-  // Allocate buffer for all samples
-  float *all_samples = (float *)calloc(duration, sizeof(float));
-  if (!all_samples) {
-    printf("Error: Could not allocate memory for audio samples\n");
-    del_aubio_source(source);
-    del_aubio_tempo(tempo);
-    del_fvec(in_fvec);
-    del_fvec(out_fvec);
-    free(beat_positions);
-
-    // Update state to indicate processing failed
-    SDL_LockMutex(track_state->data_mutex);
-    track_state->status = STATUS_IDLE;
-    SDL_UnlockMutex(track_state->data_mutex);
-
-    return;
-  }
-
-  uint_t sample_index = 0;
-  frames_processed = 0;
-  
-  do {
-    // Read from source
-    aubio_source_do(source, in_fvec, &read);
-
-    // Copy samples to buffer
-    for (uint_t i = 0; i < read; i++) {
-      if (sample_index < duration) {
-        all_samples[sample_index++] = in_fvec->data[i];
-      }
-    }
-
-    // Execute tempo detection
-    aubio_tempo_do(tempo, in_fvec, out_fvec);
-
-    // Check if beat detected
-    if (out_fvec->data[0] != 0) {
-      // Store beat position
-      if (beat_count >= beat_capacity) {
-        // Resize array if needed
-        beat_capacity *= 2;
-        beat_positions = realloc(beat_positions, beat_capacity * sizeof(float));
-      }
-
-      // Store beat position in seconds
-      beat_positions[beat_count] = aubio_tempo_get_last_s(tempo);
-      beat_count++;
-    }
-
-    // Update progress
-    frames_processed++;
-    if (total_frames > 0) {
-      SDL_LockMutex(track_state->data_mutex);
-      track_state->processing_progress = (float)frames_processed / total_frames;
-      SDL_UnlockMutex(track_state->data_mutex);
-    }
-  } while (read == hop_size);
-
-  // Update state with results - protected by mutex
   SDL_LockMutex(track_state->data_mutex);
-  track_state->in_fvec = in_fvec;
-  track_state->out_fvec = out_fvec;
-  track_state->beat_positions = beat_positions;
-  track_state->beat_count = beat_count;
-  track_state->all_samples = all_samples;
-  track_state->total_samples = duration;
-  track_state->status = STATUS_COMPLETED;
-  track_state->processing_progress = 1.0f;
+  track_state->status = STATUS_BEAT_ANALYSIS;
   SDL_UnlockMutex(track_state->data_mutex);
 
-  // Print some debug info
-  printf("Processed audio file: %s\n", track_state->selectedFile);
-  printf("Total samples: %u\n", duration);
-  printf("Detected %d beats\n", beat_count);
-  if (beat_count > 0) {
-    printf("First beat at: %.3f s\n", beat_positions[0]);
-    printf("Last beat at: %.3f s\n", beat_positions[beat_count - 1]);
+  // TODO check this: At this point sample.flag shall be EOF
+
+  Uint32 total_samples = track_state->sample->buffer_size / sizeof(float);
+  Uint32 processed_samples = 0;
+
+  const Uint8 buffer_size = 64;
+  float *current_buffer = track_state->sample->buffer;
+
+  BTT *btt = btt_new_default();
+  if (!btt) {
+    printf("Error: Could not create beat tracking object\n");
+    Sound_FreeSample(track_state->sample);
+    track_state->sample = NULL;
+    return;
   }
-  
-  // Clean up aubio source
-  del_aubio_source(source);
-  del_aubio_tempo(tempo);
+
+  btt_set_beat_tracking_callback(btt, &beat_callback, track_state);
+
+  while (processed_samples < total_samples) {
+    Uint32 samples_to_process = (processed_samples + buffer_size <= total_samples) ? 
+    buffer_size : (total_samples - processed_samples);
+
+    btt_process(btt, current_buffer, samples_to_process);
+    current_buffer += buffer_size;
+    processed_samples += buffer_size;
+  }
+
+  SDL_LockMutex(track_state->data_mutex);
+  track_state->status = STATUS_COMPLETED;
+  SDL_UnlockMutex(track_state->data_mutex);
+
+  btt_destroy(btt);
 }
 
 // Thread function for audio processing
@@ -248,7 +187,7 @@ static int audio_processing_thread(void *data) {
 
   // Update processing state if not already completed (in case of error)
   SDL_LockMutex(track_state->data_mutex);
-  if (track_state->status == STATUS_ACTIVE) {
+  if (track_state->status != STATUS_COMPLETED) {
     track_state->status = STATUS_IDLE;
   }
   SDL_UnlockMutex(track_state->data_mutex);
@@ -302,7 +241,8 @@ static void handleFileSelection(Clay_ElementId elementId,
 
     // If already processing, don't start another thread
     SDL_LockMutex(track_state->data_mutex);
-    if (track_state->status == STATUS_ACTIVE) {
+    if (track_state->status == STATUS_DECODE ||
+        track_state->status == STATUS_BEAT_ANALYSIS) {
       SDL_UnlockMutex(track_state->data_mutex);
       return;
     }
@@ -313,7 +253,9 @@ static void handleFileSelection(Clay_ElementId elementId,
       track_state->processing_thread = NULL;
     }
 
-    const char *filterPatterns[] = {"*.wav", "*.mp3"};
+    const char *filterPatterns[] = {
+        "*.wav",
+        "*.mp3"}; // This should depend on the result of Sound_AvailableDecoders
     track_state->selectedFile =
         tinyfd_openFileDialog("Select Audio File", // title
                               "",                  // default path
@@ -324,13 +266,6 @@ static void handleFileSelection(Clay_ElementId elementId,
         );
 
     if (track_state->selectedFile) {
-      // Initialize processing state
-      SDL_LockMutex(track_state->data_mutex);
-      track_state->beat_count = 0;
-      track_state->status = STATUS_ACTIVE;
-      track_state->processing_progress = 0.0f;
-      SDL_UnlockMutex(track_state->data_mutex);
-
       // Start processing thread
       track_state->processing_thread = SDL_CreateThread(
           audio_processing_thread, "AudioProcessing", track_state);
@@ -338,11 +273,6 @@ static void handleFileSelection(Clay_ElementId elementId,
       if (!track_state->processing_thread) {
         printf("Error: Could not create audio processing thread: %s\n",
                SDL_GetError());
-
-        // Reset processing state
-        SDL_LockMutex(track_state->data_mutex);
-        track_state->status = STATUS_IDLE;
-        SDL_UnlockMutex(track_state->data_mutex);
       }
     }
   }
@@ -357,6 +287,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   (void)argv;
 
   if (!TTF_Init()) {
+    return SDL_APP_FAILURE;
+  }
+
+  if (!Sound_Init()) {
     return SDL_APP_FAILURE;
   }
 
@@ -418,7 +352,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->help_icon = IMG_Load("resources/help.svg");
 
   state->audio_track.data_mutex = SDL_CreateMutex();
-  
+
   // Initialize waveform view state
   state->waveform_view.zoom = 1.0f;
   state->waveform_view.scroll = 0.0f;
@@ -452,41 +386,43 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     } else
       context_menu.visible = false;
     break;
-  case SDL_EVENT_MOUSE_WHEEL:
-    {
-      AppState *state = (AppState *)appstate;
-      
-      // Handle vertical wheel for zoom (y)
-      if (event->wheel.y != 0) {
-        // Adjust zoom level - positive y means zoom in, negative means zoom out
-        float zoom_delta = event->wheel.y * 0.1f; // Adjust sensitivity as needed
-        state->waveform_view.zoom += zoom_delta;
-        
-        // Clamp zoom to reasonable values
-        if (state->waveform_view.zoom < 1.0f) state->waveform_view.zoom = 1.0f;
-        if (state->waveform_view.zoom > 50.0f) state->waveform_view.zoom = 50.0f;
-      }
-      
-      // Handle horizontal wheel for scroll (x)
-      if (event->wheel.x != 0) {
-        // Adjust scroll position - inverted direction: positive x means scroll left, negative means scroll right
-        // Scale scroll sensitivity inversely with zoom level for smoother scrolling when zoomed in
-        float base_sensitivity = 0.05f;
-        float zoom_factor = 1.0f / state->waveform_view.zoom;
-        float scroll_delta = event->wheel.x * base_sensitivity * zoom_factor; // Removed negative sign to invert direction
-        
-        state->waveform_view.scroll += scroll_delta;
-        
-        // Clamp scroll to valid range [0, 1]
-        if (state->waveform_view.scroll < 0.0f) state->waveform_view.scroll = 0.0f;
-        if (state->waveform_view.scroll > 1.0f) state->waveform_view.scroll = 1.0f;
-      }
-      
-      // Also update Clay scroll containers
-      Clay_UpdateScrollContainers(
-          true, (Clay_Vector2){event->wheel.x, event->wheel.y}, 0.01f);
+  case SDL_EVENT_MOUSE_WHEEL: {
+    AppState *state = (AppState *)appstate;
+
+    // Handle vertical wheel for zoom (y)
+    if (event->wheel.y != 0) {
+      // Adjust zoom level - positive y means zoom in, negative means zoom out
+      float zoom_delta = event->wheel.y * 0.1f; // Adjust sensitivity as needed
+      state->waveform_view.zoom += zoom_delta;
+
+      // Clamp zoom to reasonable values
+      if (state->waveform_view.zoom < 1.0f)
+        state->waveform_view.zoom = 1.0f;
+      if (state->waveform_view.zoom > 50.0f)
+        state->waveform_view.zoom = 50.0f;
     }
-    break;
+
+    // Handle horizontal wheel for scroll (x)
+    if (event->wheel.x != 0) {
+      float base_sensitivity = 0.05f;
+      float zoom_factor = 1.0f / state->waveform_view.zoom;
+      float scroll_delta =
+          event->wheel.x * base_sensitivity *
+          zoom_factor; // Removed negative sign to invert direction
+
+      state->waveform_view.scroll += scroll_delta;
+
+      // Clamp scroll to valid range [0, 1]
+      if (state->waveform_view.scroll < 0.0f)
+        state->waveform_view.scroll = 0.0f;
+      if (state->waveform_view.scroll > 1.0f)
+        state->waveform_view.scroll = 1.0f;
+    }
+
+    // Also update Clay scroll containers
+    Clay_UpdateScrollContainers(
+        true, (Clay_Vector2){event->wheel.x, event->wheel.y}, 0.01f);
+  } break;
   default:
     break;
   };
@@ -509,6 +445,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    .sizing = layoutExpand,
                    .padding = CLAY_PADDING_ALL(16),
                    .childGap = 16}}) {
+
+    // Context menu
     if (context_menu.visible) {
       CLAY({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
                          .attachPoints = {.parent = CLAY_ATTACH_POINT_LEFT_TOP},
@@ -564,31 +502,45 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                      .childGap = 16},
           .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
       // Create waveform data with current zoom and scroll values
-      WaveformData waveformData = {
-          .samples = NULL,
-          .sampleCount = 0,
-          .currentZoom = state->waveform_view.zoom,
-          .currentScroll = state->waveform_view.scroll,
-          .lineColor = COLOR_WAVEFORM_LINE
-      };
+      WaveformData waveformData = {.samples = NULL,
+                                   .sampleCount = 0,
+                                   .beat_positions = NULL,
+                                   .beat_count = 0,
+                                   .currentZoom = state->waveform_view.zoom,
+                                   .currentScroll = state->waveform_view.scroll,
+                                   .lineColor = COLOR_WAVEFORM_LINE,
+                                   .beatColor = COLOR_WAVEFORM_BEAT};
 
       // If we have audio data, use it
       SDL_LockMutex(state->audio_track.data_mutex);
-      if (state->audio_track.all_samples && state->audio_track.total_samples > 0) {
-          waveformData.samples = state->audio_track.all_samples;
-          waveformData.sampleCount = state->audio_track.total_samples;
-          
-          // Debug info
-          static bool logged_waveform = false;
-          if (!logged_waveform) {
-              printf("Waveform display using %d samples\n", waveformData.sampleCount);
-              logged_waveform = true;
+      if (state->audio_track.status >= STATUS_BEAT_ANALYSIS &&
+          state->audio_track.sample->buffer &&
+          state->audio_track.sample->buffer_size > 0) {
+        waveformData.samples = state->audio_track.sample->buffer;
+        waveformData.sampleCount = state->audio_track.sample->buffer_size / sizeof(float);
+
+        // Add beat positions if available
+        if (state->audio_track.beat_positions &&
+            state->audio_track.beat_count > 0) {
+          waveformData.beat_positions = state->audio_track.beat_positions;
+          waveformData.beat_count = state->audio_track.beat_count;
+
+          // Debug info for beats
+          static bool logged_beats = false;
+          if (!logged_beats) {
+            printf("Waveform display using %d beats\n",
+                   waveformData.beat_count);
+            logged_beats = true;
           }
-      } else if (state->audio_track.in_fvec) {
-          // Fallback to in_fvec if all_samples not available
-          waveformData.samples = state->audio_track.in_fvec->data;
-          waveformData.sampleCount = state->audio_track.in_fvec->length;
-          printf("Fallback to in_fvec with %d samples\n", waveformData.sampleCount);
+        }
+
+        // Debug info
+        static bool logged_waveform = false;
+        if (!logged_waveform) {
+          printf("Waveform display using %d samples\n",
+                 waveformData.sampleCount);
+          logged_waveform = true;
+        }
       }
       SDL_UnlockMutex(state->audio_track.data_mutex);
 
@@ -628,25 +580,19 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     // Wait for processing thread to finish if it's running
     if (track_state->processing_thread) {
       SDL_WaitThread(track_state->processing_thread, NULL);
-      track_state->processing_thread =
-          NULL; // SDL will throw a warning if we don't do this, so let's do it
-                // with everything!
+      track_state->processing_thread = NULL;
     }
-    // Destroy mutex
+
     if (track_state->data_mutex) {
       SDL_DestroyMutex(track_state->data_mutex);
       track_state->data_mutex = NULL;
     }
 
-    // Clean up aubio objects
-    if (track_state->in_fvec) {
-      del_fvec(track_state->in_fvec);
-      track_state->in_fvec = NULL;
+    if (track_state->sample) {
+      Sound_FreeSample(track_state->sample);
+      track_state->sample = NULL;
     }
-    if (track_state->out_fvec) {
-      del_fvec(track_state->out_fvec);
-      track_state->out_fvec = NULL;
-    }
+
     if (track_state->beat_positions) {
       free(track_state->beat_positions);
       track_state->beat_positions = NULL;
@@ -670,5 +616,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
     SDL_free(state);
   }
+
+  Sound_Quit();
   TTF_Quit();
 }

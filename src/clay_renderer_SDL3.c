@@ -9,9 +9,12 @@
 typedef struct {
     float* samples;      // Audio samples
     int sampleCount;     // Number of samples
+    uint* beat_positions; // Beat positions (sample indices)
+    int beat_count;      // Number of beats
     float currentZoom;   // Zoom level (1.0 = normal)
     float currentScroll; // Scroll position (0.0 = start)
     Clay_Color lineColor; // Color of the waveform line
+    Clay_Color beatColor; // Color of the beat markers
 } WaveformData;
 
 
@@ -99,6 +102,38 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
             SDL_RenderLine(rendererData->renderer, 
                           rect.x + x, centerY, 
                           rect.x + x, centerY - lineHeight);
+        }
+    }
+    
+    // Draw beat positions if available
+    if (data->beat_positions && data->beat_count > 0) {
+        // Set beat marker color (use beatColor if set, otherwise use a default bright color)
+        if (data->beatColor.a > 0) {
+            SDL_SetRenderDrawColor(rendererData->renderer, 
+                                  data->beatColor.r, 
+                                  data->beatColor.g, 
+                                  data->beatColor.b, 
+                                  data->beatColor.a);
+        } else {
+            // Default to a bright yellow if beatColor not set
+            SDL_SetRenderDrawColor(rendererData->renderer, 255, 255, 0, 255);
+        }
+        
+        // Draw a vertical line for each beat position
+        for (int i = 0; i < data->beat_count; i++) {
+            uint beatPos = data->beat_positions[i];
+            
+            // Check if this beat is within the visible range
+            if (beatPos >= startSample && beatPos < startSample + visibleSamples) {
+                // Calculate x position for this beat
+                float relativePos = (float)(beatPos - startSample) / visibleSamples;
+                int x = rect.x + (relativePos * width);
+                
+                // Draw a vertical line for the beat
+                SDL_RenderLine(rendererData->renderer, 
+                              x, rect.y, 
+                              x, rect.y + height);
+            }
         }
     }
 }

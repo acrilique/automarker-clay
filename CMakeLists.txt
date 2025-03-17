@@ -13,16 +13,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 add_subdirectory(libs/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(libs/SDL_ttf EXCLUDE_FROM_ALL)
 add_subdirectory(libs/SDL_image EXCLUDE_FROM_ALL)
-
-# Aubio library setup needs to be done manually as it is not a CMake project
-set(AUBIO_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/aubio/src")
-set(AUBIO_LIBRARY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs/aubio/build/src")
-
-# Include aubio header directory
-include_directories(${AUBIO_INCLUDE_DIR})
-
-# Add aubio library directory
-link_directories(${AUBIO_LIBRARY_DIR})
+add_subdirectory(libs/SDL_sound EXCLUDE_FROM_ALL)
+add_subdirectory(libs/BTT EXCLUDE_FROM_ALL)
 
 # Set rpath for the executable to find the shared libraries at runtime
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
@@ -34,7 +26,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	SDL3::SDL3
 	SDL3_ttf::SDL3_ttf
 	SDL3_image::SDL3_image
-	aubio
+    SDL3_sound::SDL3_sound
+	BTT::BTT
 )
 
 add_custom_command(
@@ -42,14 +35,4 @@ add_custom_command(
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 		${CMAKE_CURRENT_SOURCE_DIR}/resources
 		${CMAKE_BINARY_DIR}/$<CONFIGURATION>/resources
-    COMMAND ${CMAKE_COMMAND} -E copy
-        ${AUBIO_LIBRARY_DIR}/libaubio.so
-        ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/libaubio.so
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-        libaubio.so
-        ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/libaubio.so.5
-    COMMAND ${CMAKE_COMMAND} -E create_symlink
-        libaubio.so
-        ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIGURATION>/libaubio.so.5.4.8
-
 )
