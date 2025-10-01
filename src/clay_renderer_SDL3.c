@@ -35,13 +35,6 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
         return;
     }
     
-    // Set drawing color
-    SDL_SetRenderDrawColor(rendererData->renderer, 
-                          data->lineColor.r, 
-                          data->lineColor.g, 
-                          data->lineColor.b, 
-                          data->lineColor.a);
-    
     // Calculate drawing parameters
     const int width = rect.w;
     const int height = rect.h;
@@ -50,22 +43,10 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
     // Draw center line for reference
     SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 100, 255); // Gray color for center line
     SDL_RenderLine(rendererData->renderer, rect.x, centerY, rect.x + width, centerY);
-    
-    // Restore waveform color
-    SDL_SetRenderDrawColor(rendererData->renderer, 
-                          data->lineColor.r, 
-                          data->lineColor.g, 
-                          data->lineColor.b, 
-                          data->lineColor.a);
-    
-    // Calculate visible range of samples based on zoom and scroll
-    // Invert the zoom logic: higher zoom = fewer visible samples (zoomed in)
-    int visibleSamples = (int)(data->sampleCount / data->currentZoom);
-    
-    // Calculate the start sample based on scroll position and visible range
-    // This ensures the scroll position is relative to the zoomed view
+
+    uint visibleSamples = (int)(data->sampleCount / data->currentZoom);
     int maxStartSample = data->sampleCount - visibleSamples;
-    int startSample = (maxStartSample > 0) ? (int)(data->currentScroll * maxStartSample) : 0;
+    uint startSample = (maxStartSample > 0) ? (int)(data->currentScroll * maxStartSample) : 0;
     
     // Ensure we're within bounds
     if (startSample < 0) startSample = 0;
@@ -73,18 +54,13 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
     if (startSample + visibleSamples > data->sampleCount) {
         visibleSamples = data->sampleCount - startSample;
     }
+
+    SDL_SetRenderDrawColor(rendererData->renderer, 
+        data->lineColor.r, 
+        data->lineColor.g, 
+        data->lineColor.b, 
+        data->lineColor.a);
     
-    // Find max amplitude in visible range to normalize display
-    float maxAmplitude = 0.01f; // Small non-zero value to avoid division by zero
-    for (int i = 0; i < visibleSamples; i++) {
-        int sampleIndex = startSample + i;
-        if (sampleIndex < data->sampleCount) {
-            float amplitude = fabsf(data->samples[sampleIndex]);
-            if (amplitude > maxAmplitude) maxAmplitude = amplitude;
-        }
-    }
-    
-    // Draw waveform with improved visualization
     for (int x = 0; x < width; x++) {
         // Map x position to sample index
         float samplePos = (float)x / width * visibleSamples;
@@ -95,8 +71,7 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
             // Get sample value and normalize it
             float sampleValue = data->samples[sampleIndex];
             
-            // Scale to pixel height (normalize by max amplitude)
-            float lineHeight = (sampleValue / maxAmplitude) * (height / 2.0f);
+            float lineHeight = (sampleValue) * (height / 2.0f);
             
             // Draw vertical line representing the sample
             SDL_RenderLine(rendererData->renderer, 

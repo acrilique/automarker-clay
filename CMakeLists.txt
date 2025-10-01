@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.27)
 project(automarker-c C)
 set(CMAKE_C_STANDARD 99)
 
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -pg -g")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
@@ -21,7 +21,7 @@ set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Example executable
-add_executable(${PROJECT_NAME} src/main.c libs/tinyfiledialogs.c)
+add_executable(${PROJECT_NAME} src/main.c src/audio_state.c libs/tinyfiledialogs.c)
 target_link_libraries(${PROJECT_NAME} PRIVATE
 	SDL3::SDL3
 	SDL3_ttf::SDL3_ttf
