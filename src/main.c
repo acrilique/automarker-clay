@@ -80,20 +80,19 @@ headerButton(Clay_ElementId buttonId, Clay_ElementId iconId, SDL_Surface *icon,
              void (*callback)(Clay_ElementId, Clay_PointerData, intptr_t),
              intptr_t userData) {
 
-  CLAY({
-      .id = buttonId,
+  CLAY(buttonId, {
       .backgroundColor =
           Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG,
       .layout = {.padding = CLAY_PADDING_ALL(4)},
       .cornerRadius = CLAY_CORNER_RADIUS(5),
   }) {
     Clay_OnHover(callback, userData);
-    CLAY({.id = iconId,
+    CLAY(iconId, {
           .layout = {.sizing = {.width = CLAY_SIZING_FIXED(50),
                                 .height = CLAY_SIZING_GROW(0)}},
+          .aspectRatio = {.aspectRatio = 1.0f},
           .image = {
               .imageData = icon,
-              .sourceDimensions = {1, 1},
           }});
   }
 }
@@ -207,7 +206,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   int width, height;
   SDL_GetWindowSize(state->window, &width, &height);
   Clay_Initialize(clayMemory, (Clay_Dimensions){(float)width, (float)height},
-                  (Clay_ErrorHandler){HandleClayErrors});
+                  (Clay_ErrorHandler){HandleClayErrors, 0});
   Clay_SetMeasureTextFunction(SDL_MeasureText, state->rendererData.fonts);
 
   state->file_icon = IMG_Load("resources/file.svg");
@@ -311,7 +310,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                               .height = CLAY_SIZING_GROW(0)};
 
   // Build main UI layout
-  CLAY({.id = CLAY_ID("MainContainer"),
+  CLAY(CLAY_ID("MainContainer"), {
         .backgroundColor = COLOR_BG_DARK,
         .layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM,
                    .sizing = layoutExpand,
@@ -320,16 +319,16 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
     // Context menu
     if (state->context_menu.visible) {
-      CLAY({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+      CLAY_AUTO_ID({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
                          .attachPoints = {.parent = CLAY_ATTACH_POINT_LEFT_TOP},
                          .offset = {state->context_menu.x, state->context_menu.y}},
             .layout = {.padding = CLAY_PADDING_ALL(8)},
             .backgroundColor = COLOR_BG_LIGHT,
             .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
-        CLAY({.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM},
+        CLAY_AUTO_ID({.layout = {.layoutDirection = CLAY_TOP_TO_BOTTOM},
               .backgroundColor = COLOR_BG_DARK,
               .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
-          CLAY({.layout = {.padding = CLAY_PADDING_ALL(16)},
+          CLAY_AUTO_ID({.layout = {.padding = CLAY_PADDING_ALL(16)},
                 .backgroundColor =
                     Clay_Hovered() ? COLOR_ACCENT : COLOR_BG_DARK}) {
             CLAY_TEXT(CLAY_STRING("Option 1"),
@@ -342,7 +341,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     }
 
     // Header bar
-    CLAY({.id = CLAY_ID("HeaderBar"),
+    CLAY(CLAY_ID("HeaderBar"), {
           .layout = {.sizing = {.width = CLAY_SIZING_GROW(0)},
                      .padding = CLAY_PADDING_ALL(16),
                      .childGap = 16,
@@ -366,7 +365,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     }
 
     // Main content area
-    CLAY({.id = CLAY_ID("MainContent"),
+    CLAY(CLAY_ID("MainContent"), {
           .backgroundColor = COLOR_BG_LIGHT,
           .layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .sizing = layoutExpand,
@@ -418,7 +417,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
       SDL_UnlockMutex(state->audio_state->data_mutex);
 
       // Create custom element in the UI
-      CLAY({.id = CLAY_ID("WaveformDisplay"),
+      CLAY(CLAY_ID("WaveformDisplay"), {
             .backgroundColor = COLOR_WAVEFORM_BG,
             .layout = {.sizing = {.width = CLAY_SIZING_GROW(0),
                                   .height = CLAY_SIZING_GROW(0)}},
