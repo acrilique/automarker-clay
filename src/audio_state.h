@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <SDL3/SDL.h>
-#include <SDL3_sound/SDL_sound.h>
+#include "../libs/SDL_sound/include/SDL3_sound/SDL_sound.h"
 #include "audio_tools/beat_track.h"
 #include "audio_tools/audio_io.h"
 

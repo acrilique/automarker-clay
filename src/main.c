@@ -1,11 +1,11 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
-#include <SDL3_sound/SDL_sound.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include <stdio.h>
 
+#include "../libs/SDL_sound/include/SDL3_sound/SDL_sound.h"
 #include "../libs/tinyfiledialogs/tinyfiledialogs.h"
 
 #define CLAY_IMPLEMENTATION
