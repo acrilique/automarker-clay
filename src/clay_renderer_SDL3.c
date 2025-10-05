@@ -24,6 +24,8 @@ typedef struct {
     // Selection
     unsigned int selection_start;
     unsigned int selection_end;
+    bool is_hovering_selection_start;
+    bool is_hovering_selection_end;
 } WaveformData;
 
 
@@ -158,6 +160,24 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
         if (end_x < rect.x + width) {
             SDL_FRect post_selection_rect = {end_x, rect.y, (rect.x + width) - end_x, height};
             SDL_RenderFillRect(rendererData->renderer, &post_selection_rect);
+        }
+
+        // Draw selection handles
+        if (data->selection_start > 0) {
+            if (data->is_hovering_selection_start) {
+                SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 255, 255);
+            } else {
+                SDL_SetRenderDrawColor(rendererData->renderer, 0, 160, 255, 255);
+            }
+            SDL_RenderLine(rendererData->renderer, start_x, rect.y, start_x, rect.y + height);
+        }
+        if (data->selection_end < data->sampleCount) {
+            if (data->is_hovering_selection_end) {
+                SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 255, 255);
+            } else {
+                SDL_SetRenderDrawColor(rendererData->renderer, 0, 160, 255, 255);
+            }
+            SDL_RenderLine(rendererData->renderer, end_x, rect.y, end_x, rect.y + height);
         }
     }
 

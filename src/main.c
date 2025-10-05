@@ -50,6 +50,13 @@ typedef enum {
   APP_RESOLVE
 } ConnectedApp;
 
+typedef enum {
+  INTERACTION_NONE,
+  INTERACTION_DRAGGING_PLAYHEAD,
+  INTERACTION_DRAGGING_START_MARKER,
+  INTERACTION_DRAGGING_END_MARKER
+} WaveformInteractionState;
+
 typedef struct app_state {
   SDL_Window *window;
   ConnectedApp connected_app;
@@ -69,6 +76,9 @@ typedef struct app_state {
     bool visible;
     int x, y;
   } context_menu;
+  WaveformInteractionState waveform_interaction_state;
+  bool is_hovering_selection_start;
+  bool is_hovering_selection_end;
 } AppState;
 
 
@@ -197,6 +207,99 @@ static void removeMarkers(Clay_ElementId elementId,
     default:
       break;
     }
+  }
+}
+
+static void handleWaveformInteraction(Clay_ElementId elementId,
+                                     Clay_PointerData pointerData,
+                                     intptr_t userData) {
+  AppState *app_state = (AppState *)userData;
+  AudioState *audio_state = app_state->audio_state;
+
+  if (audio_state->status != STATUS_COMPLETED) {
+    return;
+  }
+
+  Clay_ElementData waveform_element = Clay_GetElementData(elementId);
+  if (!waveform_element.found) {
+    return;
+  }
+
+  float click_x = pointerData.position.x - waveform_element.boundingBox.x;
+  float waveform_width = waveform_element.boundingBox.width;
+
+  uint visibleSamples = (uint)(audio_state->sample->buffer_size / sizeof(float) /
+                               app_state->waveform_view.zoom);
+  uint maxStartSample =
+      (audio_state->sample->buffer_size / sizeof(float)) - visibleSamples;
+  uint startSample = (uint)(app_state->waveform_view.scroll * maxStartSample);
+
+  // --- Hover detection ---
+  const float hover_threshold = 5.0f; // 5 pixels tolerance
+
+  // Calculate screen x for markers
+  float start_marker_x = -1.0f;
+  if (audio_state->selection_start > 0) {
+    if (audio_state->selection_start >= startSample &&
+        audio_state->selection_start < startSample + visibleSamples) {
+      start_marker_x =
+          ((float)(audio_state->selection_start - startSample) / visibleSamples) *
+          waveform_width;
+    }
+  }
+
+  float end_marker_x = -1.0f;
+  if (audio_state->selection_end <
+      (audio_state->sample->buffer_size / sizeof(float))) {
+    if (audio_state->selection_end > startSample &&
+        audio_state->selection_end <= startSample + visibleSamples) {
+      end_marker_x =
+          ((float)(audio_state->selection_end - startSample) / visibleSamples) *
+          waveform_width;
+    }
+  }
+
+  if (app_state->waveform_interaction_state == INTERACTION_NONE) {
+    app_state->is_hovering_selection_start =
+        (start_marker_x >= 0 && fabsf(click_x - start_marker_x) < hover_threshold);
+    app_state->is_hovering_selection_end =
+        (end_marker_x >= 0 && fabsf(click_x - end_marker_x) < hover_threshold);
+  }
+
+  // --- Interaction logic ---
+  uint clicked_sample =
+      startSample + (uint)((click_x / waveform_width) * visibleSamples);
+
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    if (app_state->is_hovering_selection_start) {
+      app_state->waveform_interaction_state = INTERACTION_DRAGGING_START_MARKER;
+    } else if (app_state->is_hovering_selection_end) {
+      app_state->waveform_interaction_state = INTERACTION_DRAGGING_END_MARKER;
+    } else {
+      app_state->waveform_interaction_state = INTERACTION_DRAGGING_PLAYHEAD;
+      audio_state_set_playback_position(audio_state, clicked_sample);
+    }
+  } else if (pointerData.state == CLAY_POINTER_DATA_PRESSED) {
+    switch (app_state->waveform_interaction_state) {
+    case INTERACTION_DRAGGING_PLAYHEAD:
+      audio_state_set_playback_position(audio_state, clicked_sample);
+      break;
+    case INTERACTION_DRAGGING_START_MARKER:
+      if (clicked_sample < audio_state->selection_end) {
+        audio_state->selection_start = clicked_sample;
+      }
+      break;
+    case INTERACTION_DRAGGING_END_MARKER:
+      if (clicked_sample > audio_state->selection_start) {
+        audio_state->selection_end = clicked_sample;
+      }
+      break;
+    case INTERACTION_NONE:
+      // Do nothing if not dragging
+      break;
+    }
+  } else { // Not pressed
+    app_state->waveform_interaction_state = INTERACTION_NONE;
   }
 }
 
@@ -379,6 +482,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   // Initialize waveform view state
   state->waveform_view.zoom = 50.0f;
   state->waveform_view.scroll = 0.0f;
+
+  state->waveform_interaction_state = INTERACTION_NONE;
+  state->is_hovering_selection_start = false;
+  state->is_hovering_selection_end = false;
 
   state->connected_app = APP_NONE;
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
@@ -575,7 +682,9 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                                    .playbackPosition = 0,
                                    .cursorColor = (Clay_Color){196, 94, 206, 255},
                                    .selection_start = 0,
-                                   .selection_end = 0};
+                                   .selection_end = 0,
+                                   .is_hovering_selection_start = state->is_hovering_selection_start,
+                                   .is_hovering_selection_end = state->is_hovering_selection_end};
 
       // If we have audio data, use it
       SDL_LockMutex(state->audio_state->data_mutex);
@@ -601,27 +710,28 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
           }
         }
 
-        // Add playback cursor if playing
-        if (state->audio_state->playback_state == PLAYBACK_PLAYING || 
-            state->audio_state->playback_state == PLAYBACK_PAUSED) {
+        // Add playback cursor if the track is loaded
+        if (state->audio_state->status == STATUS_COMPLETED) {
           waveformData.showPlaybackCursor = true;
           waveformData.selection_start = state->audio_state->selection_start;
           waveformData.selection_end = state->audio_state->selection_end;
-          
-          unsigned int raw_pos = audio_state_get_playback_position(state->audio_state);
-          
+
+          unsigned int raw_pos =
+              audio_state_get_playback_position(state->audio_state);
+
           // Compensate for audio buffer latency
           int latency_bytes = 0;
           if (state->audio_state->audio_stream) {
-            latency_bytes = SDL_GetAudioStreamQueued(state->audio_state->audio_stream);
+            latency_bytes =
+                SDL_GetAudioStreamQueued(state->audio_state->audio_stream);
           }
           int latency_samples = latency_bytes / sizeof(float);
-          
+
           int corrected_pos = raw_pos - latency_samples;
           if (corrected_pos < 0) {
             corrected_pos = 0;
           }
-          
+
           waveformData.playbackPosition = (unsigned int)corrected_pos;
         }
 
@@ -637,11 +747,14 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
       // Create custom element in the UI
       CLAY(CLAY_ID("WaveformDisplay"), {
-            .backgroundColor = COLOR_WAVEFORM_BG,
-            .layout = {.sizing = {.width = CLAY_SIZING_GROW(0),
-                                  .height = CLAY_SIZING_GROW(0)}},
-            .cornerRadius = CLAY_CORNER_RADIUS(8),
-            .custom = {.customData = &waveformData}}) {}
+        .backgroundColor = COLOR_WAVEFORM_BG,
+        .layout = {.sizing = {.width = CLAY_SIZING_GROW(0),
+                              .height = CLAY_SIZING_GROW(0)}},
+        .cornerRadius = CLAY_CORNER_RADIUS(8),
+        .custom = {.customData = &waveformData},
+      }) {
+        Clay_OnHover(handleWaveformInteraction, (intptr_t)state);
+      }
     }
   }
 

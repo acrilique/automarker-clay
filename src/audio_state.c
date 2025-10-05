@@ -52,6 +52,53 @@ void free_cara_audio(audio_data *audio) {
     free(audio);
 }
 
+// Audio callback function for SDL3 streaming
+static void audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
+    AudioState *state = (AudioState *)userdata;
+    
+    const int total_bytes_needed = total_amount;
+
+    if (!state || !state->playback_buffer || state->playback_state != PLAYBACK_PLAYING) {
+        Uint8* silence = SDL_calloc(1, total_bytes_needed);
+        if (silence) {
+            SDL_PutAudioStreamData(stream, silence, total_bytes_needed);
+            SDL_free(silence);
+        }
+        return;
+    }
+    
+    int current_pos_samples = SDL_GetAtomicInt(&state->playback_position);
+    Uint8* temp_buffer = malloc(total_bytes_needed);
+    int bytes_provided = 0;
+
+    while (bytes_provided < total_bytes_needed) {
+        if (current_pos_samples < state->selection_start || current_pos_samples >= state->selection_end) {
+            current_pos_samples = state->selection_start;
+        }
+
+        int samples_left_in_loop = state->selection_end - current_pos_samples;
+        int bytes_left_in_loop = samples_left_in_loop * sizeof(float);
+
+        int bytes_to_copy_this_iteration = total_bytes_needed - bytes_provided;
+
+        if (bytes_to_copy_this_iteration > bytes_left_in_loop) {
+            bytes_to_copy_this_iteration = bytes_left_in_loop;
+        }
+
+        if (bytes_to_copy_this_iteration > 0) {
+            memcpy(temp_buffer + bytes_provided, &state->playback_buffer[current_pos_samples], bytes_to_copy_this_iteration);
+            bytes_provided += bytes_to_copy_this_iteration;
+            current_pos_samples += bytes_to_copy_this_iteration / sizeof(float);
+        } else {
+            current_pos_samples = state->selection_start;
+        }
+    }
+
+    SDL_PutAudioStreamData(stream, temp_buffer, total_bytes_needed);
+    SDL_SetAtomicInt(&state->playback_position, current_pos_samples);
+    free(temp_buffer);
+}
+
 // Process audio file using CARA beat tracking
 static void process_audio_file(AudioState *state) {
   // Clean up previous processing if any - protected by mutex
@@ -189,6 +236,39 @@ static void process_audio_file(AudioState *state) {
   }
 
   state->status = STATUS_COMPLETED;
+
+  // Create playback buffer
+  if (!state->playback_buffer) {
+    state->playback_buffer_size = state->sample->buffer_size / sizeof(float);
+    state->playback_buffer = malloc(state->sample->buffer_size);
+    if (state->playback_buffer) {
+      memcpy(state->playback_buffer, state->sample->buffer,
+             state->sample->buffer_size);
+    }
+  }
+
+  // Set up audio stream
+  if (!state->audio_stream) {
+    SDL_AudioSpec spec = {.format = SDL_AUDIO_F32,
+                          .channels = state->sample->actual.channels,
+                          .freq = state->sample->actual.rate};
+
+    state->audio_device =
+        SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
+    if (state->audio_device) {
+      state->audio_stream = SDL_CreateAudioStream(&spec, &spec);
+      if (state->audio_stream) {
+        SDL_SetAudioStreamGetCallback(state->audio_stream, audio_callback,
+                                      state);
+        SDL_BindAudioStream(state->audio_device, state->audio_stream);
+        SDL_PauseAudioDevice(state->audio_device); // Start paused
+      } else {
+        SDL_CloseAudioDevice(state->audio_device);
+        state->audio_device = 0;
+      }
+    }
+  }
+
   SDL_UnlockMutex(state->data_mutex);
 
   // Cleanup CARA resources
@@ -240,6 +320,16 @@ AudioState* audio_state_create(void) {
 // Load and process audio file
 void audio_state_load_file(AudioState *state, const char *file_path) {
     if (!state || !file_path) return;
+
+    audio_state_stop_playback(state);
+    if (state->audio_stream) {
+        SDL_DestroyAudioStream(state->audio_stream);
+        state->audio_stream = NULL;
+    }
+    if (state->audio_device) {
+        SDL_CloseAudioDevice(state->audio_device);
+        state->audio_device = 0;
+    }
     
     // Wait for any existing processing to finish
     SDL_LockMutex(state->data_mutex);
@@ -314,6 +404,15 @@ void audio_state_destroy(AudioState *state) {
     
     // Stop any ongoing playback
     audio_state_stop_playback(state);
+
+    if (state->audio_stream) {
+        SDL_DestroyAudioStream(state->audio_stream);
+        state->audio_stream = NULL;
+    }
+    if (state->audio_device) {
+        SDL_CloseAudioDevice(state->audio_device);
+        state->audio_device = 0;
+    }
     
     if (state->processing_thread) {
         SDL_SetAtomicInt(&state->request_stop, 1);
@@ -340,98 +439,18 @@ void audio_state_destroy(AudioState *state) {
     SDL_free(state);
 }
 
-// Audio callback function for SDL3 streaming
-static void audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
-    AudioState *state = (AudioState *)userdata;
-    
-    const int total_bytes_needed = total_amount;
-
-    if (!state || !state->playback_buffer || state->playback_state != PLAYBACK_PLAYING) {
-        Uint8* silence = SDL_calloc(1, total_bytes_needed);
-        if (silence) {
-            SDL_PutAudioStreamData(stream, silence, total_bytes_needed);
-            SDL_free(silence);
-        }
-        return;
-    }
-    
-    int current_pos_samples = SDL_GetAtomicInt(&state->playback_position);
-    Uint8* temp_buffer = malloc(total_bytes_needed);
-    int bytes_provided = 0;
-
-    while (bytes_provided < total_bytes_needed) {
-        if (current_pos_samples < state->selection_start || current_pos_samples >= state->selection_end) {
-            current_pos_samples = state->selection_start;
-        }
-
-        int samples_left_in_loop = state->selection_end - current_pos_samples;
-        int bytes_left_in_loop = samples_left_in_loop * sizeof(float);
-
-        int bytes_to_copy_this_iteration = total_bytes_needed - bytes_provided;
-
-        if (bytes_to_copy_this_iteration > bytes_left_in_loop) {
-            bytes_to_copy_this_iteration = bytes_left_in_loop;
-        }
-
-        if (bytes_to_copy_this_iteration > 0) {
-            memcpy(temp_buffer + bytes_provided, &state->playback_buffer[current_pos_samples], bytes_to_copy_this_iteration);
-            bytes_provided += bytes_to_copy_this_iteration;
-            current_pos_samples += bytes_to_copy_this_iteration / sizeof(float);
-        } else {
-            current_pos_samples = state->selection_start;
-        }
-    }
-
-    SDL_PutAudioStreamData(stream, temp_buffer, total_bytes_needed);
-    SDL_SetAtomicInt(&state->playback_position, current_pos_samples);
-    free(temp_buffer);
-}
-
 // Start audio playback
 bool audio_state_start_playback(AudioState *state) {
     if (!state || !state->sample || state->playback_state == PLAYBACK_PLAYING) {
         return false;
     }
 
-    if (state->playback_state == PLAYBACK_STOPPED) {
+    if (state->playback_state == PLAYBACK_STOPPED && audio_state_get_playback_position(state) == 0) {
         SDL_SetAtomicInt(&state->playback_position, state->selection_start);
     }
     
-    // Create playback buffer if not exists
-    if (!state->playback_buffer) {
-        state->playback_buffer_size = state->sample->buffer_size / sizeof(float);
-        state->playback_buffer = malloc(state->sample->buffer_size);
-        if (!state->playback_buffer) {
-            printf("Error: Could not allocate playback buffer\n");
-            return false;
-        }
-        memcpy(state->playback_buffer, state->sample->buffer, state->sample->buffer_size);
-    }
-    
-    // Set up audio stream if not exists
     if (!state->audio_stream) {
-        SDL_AudioSpec spec = {
-            .format = SDL_AUDIO_F32,
-            .channels = state->sample->actual.channels,
-            .freq = state->sample->actual.rate
-        };
-        
-        state->audio_device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
-        if (!state->audio_device) {
-            printf("Error: Could not open audio device: %s\n", SDL_GetError());
-            return false;
-        }
-        
-        state->audio_stream = SDL_CreateAudioStream(&spec, &spec);
-        if (!state->audio_stream) {
-            printf("Error: Could not create audio stream: %s\n", SDL_GetError());
-            SDL_CloseAudioDevice(state->audio_device);
-            state->audio_device = 0;
-            return false;
-        }
-        
-        SDL_SetAudioStreamGetCallback(state->audio_stream, audio_callback, state);
-        SDL_BindAudioStream(state->audio_device, state->audio_stream);
+        return false;
     }
     
     state->playback_state = PLAYBACK_PLAYING;
@@ -450,17 +469,6 @@ void audio_state_stop_playback(AudioState *state) {
     }
     
     state->playback_state = PLAYBACK_STOPPED;
-    SDL_SetAtomicInt(&state->playback_position, 0);
-    
-    if (state->audio_stream) {
-        SDL_DestroyAudioStream(state->audio_stream);
-        state->audio_stream = NULL;
-    }
-    
-    if (state->audio_device) {
-        SDL_CloseAudioDevice(state->audio_device);
-        state->audio_device = 0;
-    }
     
     printf("Audio playback stopped\n");
 }
@@ -499,6 +507,11 @@ void audio_state_set_playback_position(AudioState *state, unsigned int position)
     }
     
     SDL_SetAtomicInt(&state->playback_position, position);
+
+    // If we are playing, we need to clear the stream to seek correctly
+    if (state->audio_stream) {
+        SDL_ClearAudioStream(state->audio_stream);
+    }
 }
 
 // Get current playback position
