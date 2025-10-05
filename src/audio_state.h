@@ -40,10 +40,20 @@ typedef struct {
     SDL_AtomicInt request_stop;
     float processing_progress;
     
-    // Playback state (NEW - for future sound playback)
+    // Playback state (NEW - for real-time sound playback)
     PlaybackState playback_state;
-    unsigned int playback_position;  // Current sample position during playback
+    SDL_AtomicInt playback_position;  // Current sample position during playback (atomic for thread safety)
     bool follow_playback;    // Auto-scroll during playback
+    
+    // Audio streaming
+    SDL_AudioStream *audio_stream;
+    SDL_AudioDeviceID audio_device;
+    float *playback_buffer;  // Copy of audio data for playback
+    size_t playback_buffer_size;
+
+    // Selection
+    unsigned int selection_start;
+    unsigned int selection_end;
     
 } AudioState;
 
@@ -53,6 +63,14 @@ void audio_state_destroy(AudioState *state);
 void audio_state_load_file(AudioState *state, const char *file_path);
 void audio_state_request_stop(AudioState *state);
 void audio_state_cleanup_processing(AudioState *state);
+
+// Playback functions
+bool audio_state_start_playback(AudioState *state);
+void audio_state_stop_playback(AudioState *state);
+void audio_state_pause_playback(AudioState *state);
+void audio_state_resume_playback(AudioState *state);
+void audio_state_set_playback_position(AudioState *state, unsigned int position);
+unsigned int audio_state_get_playback_position(AudioState *state);
 
 // Audio conversion functions
 audio_data* sdl_sound_to_cara_audio(Sound_Sample *sample);

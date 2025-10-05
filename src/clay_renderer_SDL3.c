@@ -15,6 +15,15 @@ typedef struct {
     float currentScroll; // Scroll position (0.0 = start)
     Clay_Color lineColor; // Color of the waveform line
     Clay_Color beatColor; // Color of the beat markers
+    
+    // Playback cursor
+    bool showPlaybackCursor;     // Whether to show playback cursor
+    unsigned int playbackPosition; // Current playback position in samples
+    Clay_Color cursorColor;      // Color of the playback cursor
+
+    // Selection
+    unsigned int selection_start;
+    unsigned int selection_end;
 } WaveformData;
 
 
@@ -120,6 +129,61 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
                               x, rect.y + height);
             }
         }
+    }
+    
+    // Draw selection
+    if (data->selection_end > data->selection_start) {
+        float start_x = -1, end_x = -1;
+
+        if (data->selection_start >= startSample && data->selection_start < startSample + visibleSamples) {
+            start_x = rect.x + ((float)(data->selection_start - startSample) / visibleSamples) * width;
+        } else if (data->selection_start < startSample) {
+            start_x = rect.x;
+        }
+
+        if (data->selection_end > startSample && data->selection_end <= startSample + visibleSamples) {
+            end_x = rect.x + ((float)(data->selection_end - startSample) / visibleSamples) * width;
+        } else if (data->selection_end > startSample + visibleSamples) {
+            end_x = rect.x + width;
+        }
+
+        SDL_SetRenderDrawBlendMode(rendererData->renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rendererData->renderer, 0, 0, 0, 128); // Semi-transparent black
+
+        if (start_x > rect.x) {
+            SDL_FRect pre_selection_rect = {rect.x, rect.y, start_x - rect.x, height};
+            SDL_RenderFillRect(rendererData->renderer, &pre_selection_rect);
+        }
+
+        if (end_x < rect.x + width) {
+            SDL_FRect post_selection_rect = {end_x, rect.y, (rect.x + width) - end_x, height};
+            SDL_RenderFillRect(rendererData->renderer, &post_selection_rect);
+        }
+    }
+
+    // Draw playback cursor if enabled and visible
+    if (data->showPlaybackCursor && data->playbackPosition >= startSample && 
+        data->playbackPosition < startSample + visibleSamples) {
+        
+        // Set cursor color (use cursorColor if set, otherwise use a default bright color)
+        if (data->cursorColor.a > 0) {
+            SDL_SetRenderDrawColor(rendererData->renderer, 
+                                  data->cursorColor.r, 
+                                  data->cursorColor.g, 
+                                  data->cursorColor.b, 
+                                  data->cursorColor.a);
+        } else {
+            // Default to a bright magenta/purple if cursorColor not set
+            SDL_SetRenderDrawColor(rendererData->renderer, 196, 94, 206, 255);
+        }
+        
+        // Calculate x position for the playback cursor
+        float relativePos = (float)(data->playbackPosition - startSample) / visibleSamples;
+        int x = rect.x + (relativePos * width);
+        
+        // Draw a thicker vertical line for the playback cursor
+        SDL_RenderLine(rendererData->renderer, x, rect.y, x, rect.y + height);
+        SDL_RenderLine(rendererData->renderer, x + 1, rect.y, x + 1, rect.y + height);
     }
 }
 

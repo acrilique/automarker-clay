@@ -59,6 +59,8 @@ typedef struct app_state {
   SDL_Surface *send_icon;
   SDL_Surface *remove_icon;
   SDL_Surface *help_icon;
+  SDL_Surface *mark_in_icon;
+  SDL_Surface *mark_out_icon;
 
   Clay_SDL3RendererData rendererData;
   AudioState *audio_state;
@@ -107,6 +109,30 @@ headerButton(Clay_ElementId buttonId, Clay_ElementId iconId, SDL_Surface *icon,
   }
 }
 
+static void handleMarkIn(Clay_ElementId elementId, Clay_PointerData pointerData,
+                        intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    AudioState *audio_state = app_state->audio_state;
+    if (audio_state->status == STATUS_COMPLETED) {
+      audio_state->selection_start = audio_state_get_playback_position(audio_state);
+    }
+  }
+}
+
+static void handleMarkOut(Clay_ElementId elementId, Clay_PointerData pointerData,
+                         intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    AudioState *audio_state = app_state->audio_state;
+    if (audio_state->status == STATUS_COMPLETED) {
+      audio_state->selection_end = audio_state_get_playback_position(audio_state);
+    }
+  }
+}
+
 static void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
                         intptr_t userData) {
   (void)elementId;
@@ -115,22 +141,35 @@ static void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
     AudioState *audio_state = app_state->audio_state;
 
     if (audio_state->status == STATUS_COMPLETED) {
-      double *beats_in_seconds =
-          malloc(sizeof(double) * audio_state->beat_count);
+      int markers_in_selection_count = 0;
       for (int i = 0; i < audio_state->beat_count; i++) {
-        beats_in_seconds[i] =
-            (double)audio_state->beat_positions[i] / audio_state->sample->actual.rate;
+        if (audio_state->beat_positions[i] >= audio_state->selection_start &&
+            audio_state->beat_positions[i] <= audio_state->selection_end) {
+          markers_in_selection_count++;
+        }
+      }
+
+      double *beats_in_seconds =
+          malloc(sizeof(double) * markers_in_selection_count);
+      int current_marker = 0;
+      for (int i = 0; i < audio_state->beat_count; i++) {
+        if (audio_state->beat_positions[i] >= audio_state->selection_start &&
+            audio_state->beat_positions[i] <= audio_state->selection_end) {
+          beats_in_seconds[current_marker] =
+              (double)(audio_state->beat_positions[i] - audio_state->selection_start) / audio_state->sample->actual.rate;
+          current_marker++;
+        }
       }
 
       switch (app_state->connected_app) {
       case APP_PREMIERE:
-        premiere_pro_add_markers(beats_in_seconds, audio_state->beat_count);
+        premiere_pro_add_markers(beats_in_seconds, markers_in_selection_count);
         break;
       case APP_AE:
-        after_effects_add_markers(beats_in_seconds, audio_state->beat_count);
+        after_effects_add_markers(beats_in_seconds, markers_in_selection_count);
         break;
       case APP_RESOLVE:
-        resolve_add_markers(beats_in_seconds, audio_state->beat_count);
+        resolve_add_markers(beats_in_seconds, markers_in_selection_count);
         break;
       default:
         break;
@@ -161,6 +200,32 @@ static void removeMarkers(Clay_ElementId elementId,
   }
 }
 
+static void handlePlayPause(Clay_ElementId elementId, Clay_PointerData pointerData,
+                            intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    AudioState *audio_state = app_state->audio_state;
+
+    // Only allow play/pause if we have completed audio processing
+    if (audio_state->status != STATUS_COMPLETED) {
+      return;
+    }
+
+    switch (audio_state->playback_state) {
+      case PLAYBACK_STOPPED:
+        audio_state_start_playback(audio_state);
+        break;
+      case PLAYBACK_PLAYING:
+        audio_state_pause_playback(audio_state);
+        break;
+      case PLAYBACK_PAUSED:
+        audio_state_resume_playback(audio_state);
+        break;
+    }
+  }
+}
+
 static void handleFileSelection(Clay_ElementId elementId,
                                 Clay_PointerData pointerData,
                                 intptr_t userData) {
@@ -168,6 +233,9 @@ static void handleFileSelection(Clay_ElementId elementId,
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
     AudioState *audio_state = app_state->audio_state;
+
+    // Stop any ongoing playback first
+    audio_state_stop_playback(audio_state);
 
     // Always allow opening the file dialog
     const char *filterPatterns[] = {
@@ -296,6 +364,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->send_icon = IMG_Load("resources/send.svg");
   state->remove_icon = IMG_Load("resources/remove.svg");
   state->help_icon = IMG_Load("resources/help.svg");
+  state->mark_in_icon = IMG_Load("resources/mark_in.svg");
+  state->mark_out_icon = IMG_Load("resources/mark_out.svg");
 
   state->audio_state = audio_state_create();
   if (!state->audio_state) {
@@ -437,13 +507,19 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    handleFileSelection, (intptr_t)state);
 
       headerButton(CLAY_ID("PlayButton"), CLAY_ID("PlayIcon"), state->play_icon,
-                   NULL, 0);
+                   handlePlayPause, (intptr_t)state);
 
       headerButton(CLAY_ID("SendButton"), CLAY_ID("SendIcon"), state->send_icon,
                    sendMarkers, (intptr_t)state);
 
       headerButton(CLAY_ID("RemoveButton"), CLAY_ID("RemoveIcon"),
                    state->remove_icon, removeMarkers, (intptr_t)state);
+
+      headerButton(CLAY_ID("MarkInButton"), CLAY_ID("MarkInIcon"),
+                   state->mark_in_icon, handleMarkIn, (intptr_t)state);
+      
+      headerButton(CLAY_ID("MarkOutButton"), CLAY_ID("MarkOutIcon"),
+                   state->mark_out_icon, handleMarkOut, (intptr_t)state);
 
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
                    NULL, 0);
@@ -488,7 +564,12 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                                    .currentZoom = state->waveform_view.zoom,
                                    .currentScroll = state->waveform_view.scroll,
                                    .lineColor = COLOR_WAVEFORM_LINE,
-                                   .beatColor = COLOR_WAVEFORM_BEAT};
+                                   .beatColor = COLOR_WAVEFORM_BEAT,
+                                   .showPlaybackCursor = false,
+                                   .playbackPosition = 0,
+                                   .cursorColor = (Clay_Color){196, 94, 206, 255},
+                                   .selection_start = 0,
+                                   .selection_end = 0};
 
       // If we have audio data, use it
       SDL_LockMutex(state->audio_state->data_mutex);
@@ -512,6 +593,30 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    waveformData.beat_count);
             logged_beats = true;
           }
+        }
+
+        // Add playback cursor if playing
+        if (state->audio_state->playback_state == PLAYBACK_PLAYING || 
+            state->audio_state->playback_state == PLAYBACK_PAUSED) {
+          waveformData.showPlaybackCursor = true;
+          waveformData.selection_start = state->audio_state->selection_start;
+          waveformData.selection_end = state->audio_state->selection_end;
+          
+          unsigned int raw_pos = audio_state_get_playback_position(state->audio_state);
+          
+          // Compensate for audio buffer latency
+          int latency_bytes = 0;
+          if (state->audio_state->audio_stream) {
+            latency_bytes = SDL_GetAudioStreamQueued(state->audio_state->audio_stream);
+          }
+          int latency_samples = latency_bytes / sizeof(float);
+          
+          int corrected_pos = raw_pos - latency_samples;
+          if (corrected_pos < 0) {
+            corrected_pos = 0;
+          }
+          
+          waveformData.playbackPosition = (unsigned int)corrected_pos;
         }
 
         // Debug info

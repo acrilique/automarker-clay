@@ -7,7 +7,7 @@
 // Desired audio format (moved from main.c)
 static Sound_AudioInfo desired = {
     .format = SDL_AUDIO_F32,
-    .channels = 2,  // Keep original stereo format to avoid channel mismatch
+    .channels = 2,
     .rate = 44100,
 };
 
@@ -108,6 +108,10 @@ static void process_audio_file(AudioState *state) {
   }
   
 
+  // Set default selection to the entire track
+  state->selection_start = 0;
+  state->selection_end = state->sample->buffer_size / sizeof(float);
+
   // CARA beat tracking parameters
   const size_t window_size = 2048;
   const size_t hop_length = 512;
@@ -141,20 +145,20 @@ static void process_audio_file(AudioState *state) {
       state->beat_positions = realloc(state->beat_positions,
                                      sizeof(unsigned int) * state->beats_buffer_size);
     }
-    
+
     // Copy beat positions - CARA returns sample positions when using BEAT_UNITS_SAMPLES
     state->beat_count = beat_result.num_beats;
     for (size_t i = 0; i < beat_result.num_beats; i++) {
       // CARA returns sample positions in terms of frames, but we need to convert to 
       // interleaved sample positions for stereo audio
       unsigned int frame_position = (unsigned int)beat_result.beat_times[i];
-      
+
       // Apply offset to account for STFT centering behavior
       // CARA currently implements center=False behavior, but we need center=True alignment
       // Add half the window size to center the frame positions correctly
       const int center_offset = window_size / 2;
       frame_position += center_offset;
-      
+
       // For stereo audio, multiply by channel count to get the correct sample position
       state->beat_positions[i] = frame_position * state->sample->actual.channels;
     }
@@ -183,7 +187,7 @@ static void process_audio_file(AudioState *state) {
     printf("CARA beat tracking found no beats\n");
     state->beat_count = 0;
   }
-  
+
   state->status = STATUS_COMPLETED;
   SDL_UnlockMutex(state->data_mutex);
 
@@ -219,10 +223,16 @@ AudioState* audio_state_create(void) {
     }
     
     SDL_SetAtomicInt(&state->request_stop, 0);
+    SDL_SetAtomicInt(&state->playback_position, 0);
     state->status = STATUS_IDLE;
     state->playback_state = PLAYBACK_STOPPED;
-    state->playback_position = 0;
     state->follow_playback = false;
+    
+    // Initialize audio streaming components
+    state->audio_stream = NULL;
+    state->audio_device = 0;
+    state->playback_buffer = NULL;
+    state->playback_buffer_size = 0;
     
     return state;
 }
@@ -302,6 +312,9 @@ void audio_state_cleanup_processing(AudioState *state) {
 void audio_state_destroy(AudioState *state) {
     if (!state) return;
     
+    // Stop any ongoing playback
+    audio_state_stop_playback(state);
+    
     if (state->processing_thread) {
         SDL_SetAtomicInt(&state->request_stop, 1);
         SDL_WaitThread(state->processing_thread, NULL);
@@ -320,5 +333,175 @@ void audio_state_destroy(AudioState *state) {
         free(state->beat_positions);
     }
     
+    if (state->playback_buffer) {
+        free(state->playback_buffer);
+    }
+    
     SDL_free(state);
+}
+
+// Audio callback function for SDL3 streaming
+static void audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
+    AudioState *state = (AudioState *)userdata;
+    
+    // total_amount is in bytes, we need to convert to samples (floats)
+    const int total_samples_needed = total_amount / sizeof(float);
+
+    if (!state || !state->playback_buffer || state->playback_state != PLAYBACK_PLAYING) {
+        // Fill with silence if not playing
+        float *silence = SDL_calloc(total_samples_needed, sizeof(float));
+        if (silence) {
+            SDL_PutAudioStreamData(stream, silence, total_samples_needed * sizeof(float));
+            SDL_free(silence);
+        }
+        return;
+    }
+    
+    int current_pos = SDL_GetAtomicInt(&state->playback_position);
+    int samples_to_copy = total_samples_needed;
+    
+    // Check if we have enough samples left
+    if (current_pos + samples_to_copy > state->playback_buffer_size) {
+        samples_to_copy = state->playback_buffer_size - current_pos;
+    }
+
+    if (samples_to_copy > 0) {
+        // Copy audio data to stream
+        SDL_PutAudioStreamData(stream, &state->playback_buffer[current_pos], samples_to_copy * sizeof(float));
+        
+        // Update playback position atomically
+        SDL_AddAtomicInt(&state->playback_position, samples_to_copy);
+    }
+    
+    // If we copied less than requested, fill the rest with silence
+    if (samples_to_copy < total_samples_needed) {
+        int remaining_samples = total_samples_needed - samples_to_copy;
+        float *silence = SDL_calloc(remaining_samples, sizeof(float));
+        if (silence) {
+            SDL_PutAudioStreamData(stream, silence, remaining_samples * sizeof(float));
+            SDL_free(silence);
+        }
+        
+        // If we reached the end, stop playback
+        if (current_pos + samples_to_copy >= state->playback_buffer_size) {
+            state->playback_state = PLAYBACK_STOPPED;
+            // We don't reset playback_position here, allows seeking/restarting
+        }
+    }
+}
+
+// Start audio playback
+bool audio_state_start_playback(AudioState *state) {
+    if (!state || !state->sample || state->playback_state == PLAYBACK_PLAYING) {
+        return false;
+    }
+    
+    // Create playback buffer if not exists
+    if (!state->playback_buffer) {
+        state->playback_buffer_size = state->sample->buffer_size / sizeof(float);
+        state->playback_buffer = malloc(state->sample->buffer_size);
+        if (!state->playback_buffer) {
+            printf("Error: Could not allocate playback buffer\n");
+            return false;
+        }
+        memcpy(state->playback_buffer, state->sample->buffer, state->sample->buffer_size);
+    }
+    
+    // Set up audio stream if not exists
+    if (!state->audio_stream) {
+        SDL_AudioSpec spec = {
+            .format = SDL_AUDIO_F32,
+            .channels = state->sample->actual.channels,
+            .freq = state->sample->actual.rate
+        };
+        
+        state->audio_device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
+        if (!state->audio_device) {
+            printf("Error: Could not open audio device: %s\n", SDL_GetError());
+            return false;
+        }
+        
+        state->audio_stream = SDL_CreateAudioStream(&spec, &spec);
+        if (!state->audio_stream) {
+            printf("Error: Could not create audio stream: %s\n", SDL_GetError());
+            SDL_CloseAudioDevice(state->audio_device);
+            state->audio_device = 0;
+            return false;
+        }
+        
+        SDL_SetAudioStreamGetCallback(state->audio_stream, audio_callback, state);
+        SDL_BindAudioStream(state->audio_device, state->audio_stream);
+    }
+    
+    state->playback_state = PLAYBACK_PLAYING;
+    SDL_ResumeAudioDevice(state->audio_device);
+    
+    printf("Audio playback started\n");
+    return true;
+}
+
+// Stop audio playback
+void audio_state_stop_playback(AudioState *state) {
+    if (!state) return;
+    
+    if (state->audio_device) {
+        SDL_PauseAudioDevice(state->audio_device);
+    }
+    
+    state->playback_state = PLAYBACK_STOPPED;
+    SDL_SetAtomicInt(&state->playback_position, 0);
+    
+    if (state->audio_stream) {
+        SDL_DestroyAudioStream(state->audio_stream);
+        state->audio_stream = NULL;
+    }
+    
+    if (state->audio_device) {
+        SDL_CloseAudioDevice(state->audio_device);
+        state->audio_device = 0;
+    }
+    
+    printf("Audio playback stopped\n");
+}
+
+// Pause audio playback
+void audio_state_pause_playback(AudioState *state) {
+    if (!state || state->playback_state != PLAYBACK_PLAYING) return;
+    
+    if (state->audio_device) {
+        SDL_PauseAudioDevice(state->audio_device);
+    }
+    
+    state->playback_state = PLAYBACK_PAUSED;
+    printf("Audio playback paused\n");
+}
+
+// Resume audio playback
+void audio_state_resume_playback(AudioState *state) {
+    if (!state || state->playback_state != PLAYBACK_PAUSED) return;
+    
+    if (state->audio_device) {
+        SDL_ResumeAudioDevice(state->audio_device);
+    }
+    
+    state->playback_state = PLAYBACK_PLAYING;
+    printf("Audio playback resumed\n");
+}
+
+// Set playback position
+void audio_state_set_playback_position(AudioState *state, unsigned int position) {
+    if (!state) return;
+    
+    // Clamp position to valid range
+    if (position > state->playback_buffer_size) {
+        position = state->playback_buffer_size;
+    }
+    
+    SDL_SetAtomicInt(&state->playback_position, position);
+}
+
+// Get current playback position
+unsigned int audio_state_get_playback_position(AudioState *state) {
+    if (!state) return 0;
+    return SDL_GetAtomicInt(&state->playback_position);
 }
