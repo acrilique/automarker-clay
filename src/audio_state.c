@@ -2,31 +2,57 @@
 #include "SDL3/SDL_atomic.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Desired audio format (moved from main.c)
 static Sound_AudioInfo desired = {
     .format = SDL_AUDIO_F32,
-    .channels = 1,
+    .channels = 2,  // Keep original stereo format to avoid channel mismatch
     .rate = 44100,
 };
 
-// Beat callback (moved from main.c, renamed)
-void audio_beat_callback(void *user_data, unsigned long long sample_time) {
-    AudioState *state = (AudioState *)user_data;
-    
-    SDL_LockMutex(state->data_mutex);
-    if (state->beat_count < state->beats_buffer_size) {
-        state->beat_positions[state->beat_count++] = sample_time;
-    } else {
-        state->beats_buffer_size *= 2;
-        state->beat_positions = realloc(state->beat_positions,
-                                       sizeof(unsigned int) * state->beats_buffer_size);
-        state->beat_positions[state->beat_count++] = sample_time;
+// Convert SDL_Sound sample to CARA audio_data structure
+audio_data* sdl_sound_to_cara_audio(Sound_Sample *sample) {
+    if (!sample || !sample->buffer || sample->buffer_size == 0) {
+        return NULL;
     }
-    SDL_UnlockMutex(state->data_mutex);
+    
+    audio_data *audio = malloc(sizeof(audio_data));
+    if (!audio) return NULL;
+    
+    // Calculate number of samples
+    size_t sample_size = sizeof(float); // CARA expects float samples
+    size_t total_samples = sample->buffer_size / sample_size;
+    
+    // Allocate and copy sample data
+    audio->samples = malloc(sample->buffer_size);
+    if (!audio->samples) {
+        free(audio);
+        return NULL;
+    }
+    
+    memcpy(audio->samples, sample->buffer, sample->buffer_size);
+    
+    // Set audio properties
+    audio->num_samples = total_samples;
+    audio->channels = sample->actual.channels;
+    audio->sample_rate = sample->actual.rate;
+    audio->file_size = sample->buffer_size;
+    
+    return audio;
 }
 
-// Process audio file (moved from main.c, made static)
+// Free CARA audio_data structure
+void free_cara_audio(audio_data *audio) {
+    if (!audio) return;
+    
+    if (audio->samples) {
+        free(audio->samples);
+    }
+    free(audio);
+}
+
+// Process audio file using CARA beat tracking
 static void process_audio_file(AudioState *state) {
   // Clean up previous processing if any - protected by mutex
   SDL_LockMutex(state->data_mutex);
@@ -63,48 +89,107 @@ static void process_audio_file(AudioState *state) {
     return;
   }
 
+  // Check for stop request after decoding
+  if (SDL_GetAtomicInt(&state->request_stop)) {
+    return;
+  }
+
   SDL_LockMutex(state->data_mutex);
   state->status = STATUS_BEAT_ANALYSIS;
   SDL_UnlockMutex(state->data_mutex);
 
-  // TODO check this: At this point sample.flag shall be EOF
-
-  Uint32 total_samples = state->sample->buffer_size / sizeof(float);
-  Uint32 processed_samples = 0;
-
-  const Uint32 buffer_size = 4096;
-  float *current_buffer = state->sample->buffer;
-
-  BTT *btt = btt_new_default();
-  if (!btt) {
-    printf("Error: Could not create beat tracking object\n");
+  // Convert SDL_Sound data to CARA format
+  audio_data *cara_audio = sdl_sound_to_cara_audio(state->sample);
+  if (!cara_audio) {
+    printf("Error: Could not convert audio data for CARA processing\n");
     Sound_FreeSample(state->sample);
     state->sample = NULL;
     return;
   }
+  
 
-  btt_set_beat_tracking_callback(btt, &audio_beat_callback, state);
+  // CARA beat tracking parameters
+  const size_t window_size = 2048;
+  const size_t hop_length = 512;
+  const size_t n_mels = 128;
+  
+  beat_params_t params = get_default_beat_params();
+  
+  // Perform beat tracking using CARA
+  beat_result_t beat_result = beat_track_audio(
+    cara_audio, 
+    window_size, 
+    hop_length, 
+    n_mels,
+    &params, 
+    BEAT_UNITS_SAMPLES  // Get results in sample positions
+  );
 
-  while (processed_samples < total_samples) {
-    if (SDL_GetAtomicInt(&state->request_stop)) {
-      btt_destroy(btt);
-      return;
-    }
-    Uint32 samples_to_process =
-        (processed_samples + buffer_size <= total_samples)
-            ? buffer_size
-            : (total_samples - processed_samples);
-
-    btt_process(btt, current_buffer, samples_to_process);
-    current_buffer += buffer_size;
-    processed_samples += buffer_size;
+  // Check for stop request after beat tracking
+  if (SDL_GetAtomicInt(&state->request_stop)) {
+    free_beat_result(&beat_result);
+    free_cara_audio(cara_audio);
+    return;
   }
 
+  // Convert CARA results to our format
   SDL_LockMutex(state->data_mutex);
+  if (beat_result.num_beats > 0 && beat_result.beat_times) {
+    // Ensure we have enough space
+    if (beat_result.num_beats > state->beats_buffer_size) {
+      state->beats_buffer_size = beat_result.num_beats * 2;
+      state->beat_positions = realloc(state->beat_positions,
+                                     sizeof(unsigned int) * state->beats_buffer_size);
+    }
+    
+    // Copy beat positions - CARA returns sample positions when using BEAT_UNITS_SAMPLES
+    state->beat_count = beat_result.num_beats;
+    for (size_t i = 0; i < beat_result.num_beats; i++) {
+      // CARA returns sample positions in terms of frames, but we need to convert to 
+      // interleaved sample positions for stereo audio
+      unsigned int frame_position = (unsigned int)beat_result.beat_times[i];
+      
+      // Apply offset to account for STFT centering behavior
+      // CARA currently implements center=False behavior, but we need center=True alignment
+      // Add half the window size to center the frame positions correctly
+      const int center_offset = window_size / 2;
+      frame_position += center_offset;
+      
+      // For stereo audio, multiply by channel count to get the correct sample position
+      state->beat_positions[i] = frame_position * state->sample->actual.channels;
+    }
+    
+    printf("CARA beat tracking completed: %d beats found, tempo: %.2f BPM\n", 
+           state->beat_count, beat_result.tempo_bpm);
+    printf("Total audio samples: %d\n", (int)(state->sample->buffer_size / sizeof(float)));
+    printf("Audio duration: %.2f seconds\n", (float)(state->sample->buffer_size / sizeof(float)) / state->sample->actual.rate);
+    printf("First few beat positions: ");
+    for (int i = 0; i < (state->beat_count < 5 ? state->beat_count : 5); i++) {
+      printf("%u ", state->beat_positions[i]);
+    }
+    printf("\n");
+    printf("Last few beat positions: ");
+    int start_idx = state->beat_count > 5 ? state->beat_count - 5 : 0;
+    for (int i = start_idx; i < state->beat_count; i++) {
+      printf("%u ", state->beat_positions[i]);
+    }
+    printf("\n");
+    printf("Beat positions as time (seconds): ");
+    for (int i = 0; i < (state->beat_count < 5 ? state->beat_count : 5); i++) {
+      printf("%.2f ", (float)state->beat_positions[i] / state->sample->actual.rate);
+    }
+    printf("\n");
+  } else {
+    printf("CARA beat tracking found no beats\n");
+    state->beat_count = 0;
+  }
+  
   state->status = STATUS_COMPLETED;
   SDL_UnlockMutex(state->data_mutex);
 
-  btt_destroy(btt);
+  // Cleanup CARA resources
+  free_beat_result(&beat_result);
+  free_cara_audio(cara_audio);
 }
 
 // Processing thread (moved from main.c, made static)

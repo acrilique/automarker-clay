@@ -4,7 +4,8 @@
 #include <stdbool.h>
 #include <SDL3/SDL.h>
 #include <SDL3_sound/SDL_sound.h>
-#include "../libs/BTT/BTT.h"
+#include "audio_tools/beat_track.h"
+#include "audio_tools/audio_io.h"
 
 // Status enum (moved from main.c)
 typedef enum {
@@ -53,7 +54,8 @@ void audio_state_load_file(AudioState *state, const char *file_path);
 void audio_state_request_stop(AudioState *state);
 void audio_state_cleanup_processing(AudioState *state);
 
-// Beat callback (moved from main.c)
-void audio_beat_callback(void *user_data, unsigned long long sample_time);
+// Audio conversion functions
+audio_data* sdl_sound_to_cara_audio(Sound_Sample *sample);
+void free_cara_audio(audio_data *audio);
 
 #endif // AUDIO_STATE_H

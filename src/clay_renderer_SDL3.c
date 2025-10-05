@@ -44,9 +44,19 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
     SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 100, 255); // Gray color for center line
     SDL_RenderLine(rendererData->renderer, rect.x, centerY, rect.x + width, centerY);
 
-    uint visibleSamples = (int)(data->sampleCount / data->currentZoom);
-    int maxStartSample = data->sampleCount - visibleSamples;
-    uint startSample = (maxStartSample > 0) ? (int)(data->currentScroll * maxStartSample) : 0;
+    // Fix: Calculate visible samples correctly for zoom levels
+    // When zoom = 1.0, show all samples
+    // When zoom > 1.0, show fewer samples (zoomed in)
+    // When zoom < 1.0, still show all samples but with different sampling
+    uint visibleSamples;
+    if (data->currentZoom >= 1.0f) {
+        visibleSamples = (uint)(data->sampleCount / data->currentZoom);
+    } else {
+        visibleSamples = data->sampleCount; // Show all samples when zoomed out
+    }
+    
+    int maxStartSample = (data->sampleCount > visibleSamples) ? (data->sampleCount - visibleSamples) : 0;
+    uint startSample = (maxStartSample > 0) ? (uint)(data->currentScroll * maxStartSample) : 0;
     
     // Ensure we're within bounds
     if (startSample < 0) startSample = 0;

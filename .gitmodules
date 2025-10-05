@@ -10,6 +10,3 @@
 [submodule "libs/clay"]
 	path = libs/clay
 	url = https://github.com/nicbarker/clay
-[submodule "libs/BTT"]
-	path = libs/BTT
-	url = https://github.com/michaelkrzyzaniak/Beat-and-Tempo-Tracking.git

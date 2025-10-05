@@ -14,20 +14,28 @@ add_subdirectory(libs/SDL EXCLUDE_FROM_ALL)
 add_subdirectory(libs/SDL_ttf EXCLUDE_FROM_ALL)
 add_subdirectory(libs/SDL_image EXCLUDE_FROM_ALL)
 add_subdirectory(libs/SDL_sound EXCLUDE_FROM_ALL)
-add_subdirectory(libs/BTT EXCLUDE_FROM_ALL)
+add_subdirectory(libs/CARA EXCLUDE_FROM_ALL)
+
+find_package(CURL REQUIRED)
+
+# Add OpenBLAS include directory for CARA headers
+if(EXISTS "/usr/include/openblas")
+    include_directories("/usr/include/openblas")
+endif()
 
 # Set rpath for the executable to find the shared libraries at runtime
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
 
 # Example executable
-add_executable(${PROJECT_NAME} src/main.c src/audio_state.c libs/tinyfiledialogs.c)
+add_executable(${PROJECT_NAME} src/main.c src/audio_state.c src/connections/process_utils.c src/connections/premiere_pro.c src/connections/after_effects.c src/connections/resolve.c libs/tinyfiledialogs.c)
 target_link_libraries(${PROJECT_NAME} PRIVATE
 	SDL3::SDL3
 	SDL3_ttf::SDL3_ttf
 	SDL3_image::SDL3_image
     SDL3_sound::SDL3_sound
-	BTT::BTT
+	CARA::CARA
+	CURL::libcurl
 )
 
 add_custom_command(
