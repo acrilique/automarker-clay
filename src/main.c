@@ -402,17 +402,23 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     Clay_SetPointerState((Clay_Vector2){event->motion.x, event->motion.y},
                          event->motion.state & SDL_BUTTON_LMASK);
     break;
-  case SDL_EVENT_MOUSE_BUTTON_DOWN:
+  case SDL_EVENT_MOUSE_BUTTON_UP:
+  case SDL_EVENT_MOUSE_BUTTON_DOWN: {
     AppState *state = (AppState *)appstate;
-    Clay_SetPointerState((Clay_Vector2){event->button.x, event->button.y},
-                         event->button.button == SDL_BUTTON_LEFT);
-    if (event->button.button == SDL_BUTTON_RIGHT) {
-      state->context_menu.x = event->button.x;
-      state->context_menu.y = event->button.y;
+    float x, y;
+    const Uint32 button_state = SDL_GetMouseState(&x, &y);
+    Clay_SetPointerState((Clay_Vector2){x, y},
+                         (button_state & SDL_BUTTON_LMASK) != 0);
+
+    if (event->button.button == SDL_BUTTON_RIGHT && event->button.down) {
+      state->context_menu.x = (int)event->button.x;
+      state->context_menu.y = (int)event->button.y;
       state->context_menu.visible = true;
-    } else
+    } else if (event->button.button == SDL_BUTTON_LEFT && event->button.down) {
       state->context_menu.visible = false;
+    }
     break;
+  }
   case SDL_EVENT_MOUSE_WHEEL: {
     AppState *state = (AppState *)appstate;
 
