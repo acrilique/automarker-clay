@@ -10,3 +10,12 @@
 [submodule "libs/clay"]
 	path = libs/clay
 	url = https://github.com/nicbarker/clay
+[submodule "libs/tinyfiledialogs"]
+	path = libs/tinyfiledialogs
+	url = https://git.code.sf.net/p/tinyfiledialogs/code
+[submodule "libs/SDL_sound"]
+	path = libs/SDL_sound
+	url = https://github.com/icculus/SDL_sound.git
+[submodule "libs/CARA"]
+	path = libs/CARA
+	url = https://github.com/acrilique/CARA.git

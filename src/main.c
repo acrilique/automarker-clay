@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-#include "../libs/tinyfiledialogs.h"
+#include "../libs/tinyfiledialogs/tinyfiledialogs.h"
 
 #define CLAY_IMPLEMENTATION
 #include "../libs/clay/clay.h"
