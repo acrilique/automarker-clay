@@ -344,56 +344,57 @@ void audio_state_destroy(AudioState *state) {
 static void audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
     AudioState *state = (AudioState *)userdata;
     
-    // total_amount is in bytes, we need to convert to samples (floats)
-    const int total_samples_needed = total_amount / sizeof(float);
+    const int total_bytes_needed = total_amount;
 
     if (!state || !state->playback_buffer || state->playback_state != PLAYBACK_PLAYING) {
-        // Fill with silence if not playing
-        float *silence = SDL_calloc(total_samples_needed, sizeof(float));
+        Uint8* silence = SDL_calloc(1, total_bytes_needed);
         if (silence) {
-            SDL_PutAudioStreamData(stream, silence, total_samples_needed * sizeof(float));
+            SDL_PutAudioStreamData(stream, silence, total_bytes_needed);
             SDL_free(silence);
         }
         return;
     }
     
-    int current_pos = SDL_GetAtomicInt(&state->playback_position);
-    int samples_to_copy = total_samples_needed;
-    
-    // Check if we have enough samples left
-    if (current_pos + samples_to_copy > state->playback_buffer_size) {
-        samples_to_copy = state->playback_buffer_size - current_pos;
+    int current_pos_samples = SDL_GetAtomicInt(&state->playback_position);
+    Uint8* temp_buffer = malloc(total_bytes_needed);
+    int bytes_provided = 0;
+
+    while (bytes_provided < total_bytes_needed) {
+        if (current_pos_samples < state->selection_start || current_pos_samples >= state->selection_end) {
+            current_pos_samples = state->selection_start;
+        }
+
+        int samples_left_in_loop = state->selection_end - current_pos_samples;
+        int bytes_left_in_loop = samples_left_in_loop * sizeof(float);
+
+        int bytes_to_copy_this_iteration = total_bytes_needed - bytes_provided;
+
+        if (bytes_to_copy_this_iteration > bytes_left_in_loop) {
+            bytes_to_copy_this_iteration = bytes_left_in_loop;
+        }
+
+        if (bytes_to_copy_this_iteration > 0) {
+            memcpy(temp_buffer + bytes_provided, &state->playback_buffer[current_pos_samples], bytes_to_copy_this_iteration);
+            bytes_provided += bytes_to_copy_this_iteration;
+            current_pos_samples += bytes_to_copy_this_iteration / sizeof(float);
+        } else {
+            current_pos_samples = state->selection_start;
+        }
     }
 
-    if (samples_to_copy > 0) {
-        // Copy audio data to stream
-        SDL_PutAudioStreamData(stream, &state->playback_buffer[current_pos], samples_to_copy * sizeof(float));
-        
-        // Update playback position atomically
-        SDL_AddAtomicInt(&state->playback_position, samples_to_copy);
-    }
-    
-    // If we copied less than requested, fill the rest with silence
-    if (samples_to_copy < total_samples_needed) {
-        int remaining_samples = total_samples_needed - samples_to_copy;
-        float *silence = SDL_calloc(remaining_samples, sizeof(float));
-        if (silence) {
-            SDL_PutAudioStreamData(stream, silence, remaining_samples * sizeof(float));
-            SDL_free(silence);
-        }
-        
-        // If we reached the end, stop playback
-        if (current_pos + samples_to_copy >= state->playback_buffer_size) {
-            state->playback_state = PLAYBACK_STOPPED;
-            // We don't reset playback_position here, allows seeking/restarting
-        }
-    }
+    SDL_PutAudioStreamData(stream, temp_buffer, total_bytes_needed);
+    SDL_SetAtomicInt(&state->playback_position, current_pos_samples);
+    free(temp_buffer);
 }
 
 // Start audio playback
 bool audio_state_start_playback(AudioState *state) {
     if (!state || !state->sample || state->playback_state == PLAYBACK_PLAYING) {
         return false;
+    }
+
+    if (state->playback_state == PLAYBACK_STOPPED) {
+        SDL_SetAtomicInt(&state->playback_position, state->selection_start);
     }
     
     // Create playback buffer if not exists
