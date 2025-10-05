@@ -13,11 +13,13 @@
 
 #include "./clay_renderer_SDL3.c"
 #include "audio_state.h"
+#include "connections/process_utils.h"
+#include "connections/premiere_pro.h"
+#include "connections/after_effects.h"
+#include "connections/resolve.h"
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
-
-static const Uint32 CORNER_RADIUS = 8;
 
 // General colors
 static const Clay_Color COLOR_BG_DARK = (Clay_Color){43, 41, 51, 255};
@@ -29,7 +31,6 @@ static const Clay_Color COLOR_ACCENT = (Clay_Color){140, 140, 140, 255};
 static const Clay_Color COLOR_BUTTON_BG = (Clay_Color){140, 140, 140, 255};
 static const Clay_Color COLOR_BUTTON_BG_HOVER =
     (Clay_Color){160, 160, 160, 255};
-static const Clay_Color COLOR_BUTTON_SVG = (Clay_Color){255, 255, 255, 255};
 
 // Waveform colors
 static const Clay_Color COLOR_WAVEFORM_BG = (Clay_Color){60, 60, 60, 255};
@@ -42,8 +43,17 @@ typedef struct {
   float scroll; // Scroll position (0.0 = start, 1.0 = end)
 } WaveformViewState;
 
+typedef enum {
+  APP_NONE,
+  APP_PREMIERE,
+  APP_AE,
+  APP_RESOLVE
+} ConnectedApp;
+
 typedef struct app_state {
   SDL_Window *window;
+  ConnectedApp connected_app;
+  SDL_Thread *app_status_thread;
   SDL_Surface *file_icon;
   SDL_Surface *play_icon;
   SDL_Surface *send_icon;
@@ -97,9 +107,64 @@ headerButton(Clay_ElementId buttonId, Clay_ElementId iconId, SDL_Surface *icon,
   }
 }
 
+static void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
+                        intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    AudioState *audio_state = app_state->audio_state;
+
+    if (audio_state->status == STATUS_COMPLETED) {
+      double *beats_in_seconds =
+          malloc(sizeof(double) * audio_state->beat_count);
+      for (int i = 0; i < audio_state->beat_count; i++) {
+        beats_in_seconds[i] =
+            (double)audio_state->beat_positions[i] / audio_state->sample->actual.rate;
+      }
+
+      switch (app_state->connected_app) {
+      case APP_PREMIERE:
+        premiere_pro_add_markers(beats_in_seconds, audio_state->beat_count);
+        break;
+      case APP_AE:
+        after_effects_add_markers(beats_in_seconds, audio_state->beat_count);
+        break;
+      case APP_RESOLVE:
+        resolve_add_markers(beats_in_seconds, audio_state->beat_count);
+        break;
+      default:
+        break;
+      }
+      free(beats_in_seconds);
+    }
+  }
+}
+
+static void removeMarkers(Clay_ElementId elementId,
+                         Clay_PointerData pointerData, intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    switch (app_state->connected_app) {
+    case APP_PREMIERE:
+      premiere_pro_clear_all_markers();
+      break;
+    case APP_AE:
+      after_effects_clear_all_markers();
+      break;
+    case APP_RESOLVE:
+      resolve_clear_all_markers();
+      break;
+    default:
+      break;
+    }
+  }
+}
+
 static void handleFileSelection(Clay_ElementId elementId,
                                 Clay_PointerData pointerData,
                                 intptr_t userData) {
+  (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
     AudioState *audio_state = app_state->audio_state;
@@ -144,6 +209,23 @@ static void handleFileSelection(Clay_ElementId elementId,
 
 void HandleClayErrors(Clay_ErrorData errorData) {
   printf("%s", errorData.errorText.chars);
+}
+
+int check_app_status(void *data) {
+    AppState *app_state = (AppState *)data;
+    while (true) {
+        if (is_process_running(PREMIERE_PROCESS_NAME)) {
+            app_state->connected_app = APP_PREMIERE;
+        } else if (is_process_running(AFTERFX_PROCESS_NAME)) {
+            app_state->connected_app = APP_AE;
+        } else if (is_process_running(RESOLVE_PROCESS_NAME)) {
+            app_state->connected_app = APP_RESOLVE;
+        } else {
+            app_state->connected_app = APP_NONE;
+        }
+        SDL_Delay(1000); // Check every second
+    }
+    return 0;
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
@@ -227,6 +309,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   // Initialize waveform view state
   state->waveform_view.zoom = 50.0f;
   state->waveform_view.scroll = 0.0f;
+
+  state->connected_app = APP_NONE;
+  state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
 
   *appstate = state;
   return SDL_APP_CONTINUE;
@@ -355,13 +440,36 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    NULL, 0);
 
       headerButton(CLAY_ID("SendButton"), CLAY_ID("SendIcon"), state->send_icon,
-                   NULL, 0);
+                   sendMarkers, (intptr_t)state);
 
       headerButton(CLAY_ID("RemoveButton"), CLAY_ID("RemoveIcon"),
-                   state->remove_icon, NULL, 0);
+                   state->remove_icon, removeMarkers, (intptr_t)state);
 
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
                    NULL, 0);
+
+      switch (state->connected_app) {
+      case APP_PREMIERE:
+        CLAY_TEXT(CLAY_STRING("Premiere Pro Connected"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+        break;
+      case APP_AE:
+        CLAY_TEXT(CLAY_STRING("After Effects Connected"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+        break;
+      case APP_RESOLVE:
+        CLAY_TEXT(CLAY_STRING("DaVinci Resolve Connected"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+        break;
+      default:
+        CLAY_TEXT(CLAY_STRING("No App Connected"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+        break;
+      }
     }
 
     // Main content area
@@ -448,6 +556,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
   AppState *state = appstate;
 
   if (state) {
+    SDL_DetachThread(state->app_status_thread);
     audio_state_destroy(state->audio_state);
 
     // Clean up SDL resources
