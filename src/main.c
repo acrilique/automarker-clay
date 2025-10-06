@@ -20,6 +20,7 @@
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
+static const Uint32 FONT_SMALL = 1;
 
 // General colors
 static const Clay_Color COLOR_BG_DARK = (Clay_Color){43, 41, 51, 255};
@@ -83,8 +84,19 @@ typedef struct app_state {
   bool is_selection_dragging;
   uint selection_drag_start;
   Clay_BoundingBox waveform_bbox;
+
+  // Tooltip state
+  bool is_tooltip_visible;
+  const char *tooltip_text;
+  Clay_ElementId tooltip_target_id;
 } AppState;
 
+
+static int get_window_width(AppState *state) {
+  int w;
+  SDL_GetWindowSize(state->window, &w, NULL);
+  return w;
+}
 
 static inline Clay_Dimensions SDL_MeasureText(Clay_StringSlice text,
                                               Clay_TextElementConfig *config,
@@ -103,6 +115,7 @@ static inline Clay_Dimensions SDL_MeasureText(Clay_StringSlice text,
 
 static void
 headerButton(Clay_ElementId buttonId, Clay_ElementId iconId, SDL_Surface *icon,
+             const char *tooltip,
              void (*callback)(Clay_ElementId, Clay_PointerData, intptr_t),
              intptr_t userData) {
 
@@ -112,7 +125,16 @@ headerButton(Clay_ElementId buttonId, Clay_ElementId iconId, SDL_Surface *icon,
       .layout = {.padding = CLAY_PADDING_ALL(4)},
       .cornerRadius = CLAY_CORNER_RADIUS(5),
   }) {
-    Clay_OnHover(callback, userData);
+    if (callback) {
+      Clay_OnHover(callback, userData);
+    }
+
+    if (Clay_Hovered()) {
+      AppState *app_state = (AppState *)userData;
+      app_state->is_tooltip_visible = true;
+      app_state->tooltip_text = tooltip;
+      app_state->tooltip_target_id = buttonId;
+    }
     CLAY(iconId, {
           .layout = {.sizing = {.width = CLAY_SIZING_FIXED(50),
                                 .height = CLAY_SIZING_GROW(0)}},
@@ -458,7 +480,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 
-  state->rendererData.fonts = SDL_calloc(1, sizeof(TTF_Font *));
+  state->rendererData.fonts = SDL_calloc(2, sizeof(TTF_Font *));
   if (!state->rendererData.fonts) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR,
                  "Failed to allocate memory for the font array: %s",
@@ -466,14 +488,21 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 
-  TTF_Font *font = TTF_OpenFont("resources/Roboto-Regular.ttf", 24);
-  if (!font) {
-    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load font: %s",
+  TTF_Font *font_regular = TTF_OpenFont("resources/Roboto-Regular.ttf", 22);
+  if (!font_regular) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load regular font: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+  state->rendererData.fonts[FONT_REGULAR] = font_regular;
 
-  state->rendererData.fonts[FONT_REGULAR] = font;
+  TTF_Font *font_small = TTF_OpenFont("resources/Roboto-Regular.ttf", 14);
+  if (!font_small) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load small font: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
+  state->rendererData.fonts[FONT_SMALL] = font_small;
 
   /* Initialize Clay */
   uint64_t totalMemorySize = Clay_MinMemorySize();
@@ -513,6 +542,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->is_selection_dragging = false;
   state->selection_drag_start = 0;
   state->waveform_bbox = (Clay_BoundingBox){0, 0, 0, 0};
+
+  state->is_tooltip_visible = false;
+  state->tooltip_text = "";
+  state->tooltip_target_id = (Clay_ElementId){0};
 
   state->connected_app = APP_NONE;
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
@@ -651,6 +684,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
 SDL_AppResult SDL_AppIterate(void *appstate) {
   AppState *state = appstate;
+  state->is_tooltip_visible = false;
 
   Clay_BeginLayout();
 
@@ -681,7 +715,6 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                     Clay_Hovered() ? COLOR_ACCENT : COLOR_BG_DARK}) {
             CLAY_TEXT(CLAY_STRING("Option 1"),
                       CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR,
-                                        .fontSize = 16,
                                         .textColor = COLOR_WHITE}));
           }
         }
@@ -697,47 +730,86 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
           .backgroundColor = COLOR_BG_LIGHT,
           .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
       headerButton(CLAY_ID("FileButton"), CLAY_ID("FileIcon"), state->file_icon,
-                   handleFileSelection, (intptr_t)state);
+                   "Open audio file (Ctrl+F)", handleFileSelection,
+                   (intptr_t)state);
 
       headerButton(CLAY_ID("PlayButton"), CLAY_ID("PlayIcon"), state->play_icon,
-                   handlePlayPause, (intptr_t)state);
+                   "Play/Pause (Space)", handlePlayPause, (intptr_t)state);
 
       headerButton(CLAY_ID("SendButton"), CLAY_ID("SendIcon"), state->send_icon,
-                   sendMarkers, (intptr_t)state);
+                   "Send markers to connected app (Ctrl+Enter)", sendMarkers,
+                   (intptr_t)state);
 
       headerButton(CLAY_ID("RemoveButton"), CLAY_ID("RemoveIcon"),
-                   state->remove_icon, removeMarkers, (intptr_t)state);
+                   state->remove_icon, "Remove all markers from connected app (Ctrl+Backspace)",
+                   removeMarkers, (intptr_t)state);
 
       headerButton(CLAY_ID("MarkInButton"), CLAY_ID("MarkInIcon"),
-                   state->mark_in_icon, handleMarkIn, (intptr_t)state);
-      
+                   state->mark_in_icon, "Set selection start", handleMarkIn,
+                   (intptr_t)state);
+
       headerButton(CLAY_ID("MarkOutButton"), CLAY_ID("MarkOutIcon"),
-                   state->mark_out_icon, handleMarkOut, (intptr_t)state);
+                   state->mark_out_icon, "Set selection end", handleMarkOut,
+                   (intptr_t)state);
 
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
-                   NULL, 0);
+                   "Help", NULL, (intptr_t)state);
 
       switch (state->connected_app) {
       case APP_PREMIERE:
         CLAY_TEXT(CLAY_STRING("Premiere Pro Connected"),
                   CLAY_TEXT_CONFIG(
-                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+                      {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
         break;
       case APP_AE:
         CLAY_TEXT(CLAY_STRING("After Effects Connected"),
                   CLAY_TEXT_CONFIG(
-                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+                      {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
         break;
       case APP_RESOLVE:
         CLAY_TEXT(CLAY_STRING("DaVinci Resolve Connected"),
                   CLAY_TEXT_CONFIG(
-                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+                      {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
         break;
       default:
         CLAY_TEXT(CLAY_STRING("No App Connected"),
                   CLAY_TEXT_CONFIG(
-                      {.fontId = FONT_REGULAR, .fontSize = 16, .textColor = COLOR_WHITE}));
+                      {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
         break;
+      }
+    }
+
+    // Tooltip
+    if (state->is_tooltip_visible) {
+      Clay_ElementData target_element =
+          Clay_GetElementData(state->tooltip_target_id);
+      Clay_FloatingAttachPoints attach_points;
+
+      if (target_element.found &&
+          target_element.boundingBox.x < get_window_width(state) / 2) {
+        attach_points.parent = CLAY_ATTACH_POINT_LEFT_BOTTOM;
+        attach_points.element = CLAY_ATTACH_POINT_LEFT_TOP;
+      } else {
+        attach_points.parent = CLAY_ATTACH_POINT_RIGHT_BOTTOM;
+        attach_points.element = CLAY_ATTACH_POINT_RIGHT_TOP;
+      }
+
+      CLAY(CLAY_ID("Tooltip"),
+           {.floating = {.attachTo = CLAY_ATTACH_TO_ELEMENT_WITH_ID,
+                         .parentId = state->tooltip_target_id.id,
+                         .attachPoints = attach_points,
+                         .offset = {0, 8}},
+            .layout = {.padding = CLAY_PADDING_ALL(4), .sizing = {.width = { .size = { .minMax = { .max = 280 }}}}},
+            .backgroundColor = COLOR_BG_DARK,
+            .border = {.color = COLOR_ACCENT,
+                       .width = {.top = 1, .bottom = 1, .left = 1, .right = 1}},
+            .cornerRadius = CLAY_CORNER_RADIUS(4)}) {
+        Clay_String tooltip_string = {.isStaticallyAllocated = true,
+                                      .length = strlen(state->tooltip_text),
+                                      .chars = state->tooltip_text};
+        CLAY_TEXT(tooltip_string,
+                  CLAY_TEXT_CONFIG({.fontId = FONT_SMALL,
+                                    .textColor = COLOR_WHITE}));
       }
     }
 
@@ -877,6 +949,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
     if (state->rendererData.fonts) {
       TTF_CloseFont(state->rendererData.fonts[FONT_REGULAR]);
+      TTF_CloseFont(state->rendererData.fonts[FONT_SMALL]);
 
       SDL_free(state->rendererData.fonts);
     }
