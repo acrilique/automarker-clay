@@ -463,13 +463,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   }
   *appstate = state;
 
-  if (!SDL_CreateWindowAndRenderer("automarker", 640, 480, 0, &state->window,
+  if (!SDL_CreateWindowAndRenderer("automarker", 800, 480, 0, &state->window,
                                    &state->rendererData.renderer)) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR,
                  "Failed to create window and renderer: %s", SDL_GetError());
     return SDL_APP_FAILURE;
   }
   SDL_SetWindowResizable(state->window, true);
+  SDL_SetWindowMinimumSize(state->window, 800, 480);
 
   state->rendererData.textEngine =
       TTF_CreateRendererTextEngine(state->rendererData.renderer);
@@ -754,6 +755,9 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
                    "Help", NULL, (intptr_t)state);
+
+      // empty container to push status text to the right
+      CLAY_AUTO_ID({.layout.sizing = {.width = CLAY_SIZING_GROW(1)}});
 
       switch (state->connected_app) {
       case APP_PREMIERE:
