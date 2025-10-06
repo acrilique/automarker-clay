@@ -66,13 +66,12 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
         visibleSamples = data->sampleCount; // Show all samples when zoomed out
     }
     
-    int maxStartSample = (data->sampleCount > visibleSamples) ? (data->sampleCount - visibleSamples) : 0;
+    int maxStartSample = (data->sampleCount > (int)visibleSamples) ? (data->sampleCount - visibleSamples) : 0;
     uint startSample = (maxStartSample > 0) ? (uint)(data->currentScroll * maxStartSample) : 0;
     
     // Ensure we're within bounds
-    if (startSample < 0) startSample = 0;
-    if (visibleSamples > data->sampleCount) visibleSamples = data->sampleCount;
-    if (startSample + visibleSamples > data->sampleCount) {
+    if (visibleSamples > (uint)data->sampleCount) visibleSamples = data->sampleCount;
+    if (startSample + visibleSamples > (uint)data->sampleCount) {
         visibleSamples = data->sampleCount - startSample;
     }
 
@@ -171,7 +170,7 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
             }
             SDL_RenderLine(rendererData->renderer, start_x, rect.y, start_x, rect.y + height);
         }
-        if (data->selection_end < data->sampleCount) {
+        if (data->selection_end < (unsigned int)data->sampleCount) {
             if (data->is_hovering_selection_end) {
                 SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 255, 255);
             } else {
@@ -342,7 +341,7 @@ SDL_Rect currentClippingRectangle;
 
 static void SDL_Clay_RenderClayCommands(Clay_SDL3RendererData *rendererData, Clay_RenderCommandArray *rcommands)
 {
-    for (size_t i = 0; i < rcommands->length; i++) {
+    for (int32_t i = 0; i < rcommands->length; i++) {
         Clay_RenderCommand *rcmd = Clay_RenderCommandArray_Get(rcommands, i);
         const Clay_BoundingBox bounding_box = rcmd->boundingBox;
         const SDL_FRect rect = { (int)bounding_box.x, (int)bounding_box.y, (int)bounding_box.width, (int)bounding_box.height };

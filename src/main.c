@@ -54,7 +54,8 @@ typedef enum {
   INTERACTION_NONE,
   INTERACTION_DRAGGING_PLAYHEAD,
   INTERACTION_DRAGGING_START_MARKER,
-  INTERACTION_DRAGGING_END_MARKER
+  INTERACTION_DRAGGING_END_MARKER,
+  INTERACTION_DRAGGING_SELECTION
 } WaveformInteractionState;
 
 typedef struct app_state {
@@ -79,6 +80,9 @@ typedef struct app_state {
   WaveformInteractionState waveform_interaction_state;
   bool is_hovering_selection_start;
   bool is_hovering_selection_end;
+  bool is_selection_dragging;
+  uint selection_drag_start;
+  Clay_BoundingBox waveform_bbox;
 } AppState;
 
 
@@ -270,8 +274,19 @@ static void handleWaveformInteraction(Clay_ElementId elementId,
   uint clicked_sample =
       startSample + (uint)((click_x / waveform_width) * visibleSamples);
 
+  SDL_Keymod mod_state = SDL_GetModState();
+  bool ctrl_pressed = mod_state & SDL_KMOD_CTRL;
+  bool shift_pressed = mod_state & SDL_KMOD_SHIFT;
+
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
-    if (app_state->is_hovering_selection_start) {
+    if (ctrl_pressed && !shift_pressed) {
+      app_state->waveform_interaction_state = INTERACTION_DRAGGING_SELECTION;
+      app_state->selection_drag_start = clicked_sample;
+      audio_state->selection_start = clicked_sample;
+      audio_state->selection_end = clicked_sample;
+    } else if (ctrl_pressed && shift_pressed) {
+      audio_state->selection_start = clicked_sample;
+    } else if (app_state->is_hovering_selection_start) {
       app_state->waveform_interaction_state = INTERACTION_DRAGGING_START_MARKER;
     } else if (app_state->is_hovering_selection_end) {
       app_state->waveform_interaction_state = INTERACTION_DRAGGING_END_MARKER;
@@ -292,6 +307,15 @@ static void handleWaveformInteraction(Clay_ElementId elementId,
     case INTERACTION_DRAGGING_END_MARKER:
       if (clicked_sample > audio_state->selection_start) {
         audio_state->selection_end = clicked_sample;
+      }
+      break;
+    case INTERACTION_DRAGGING_SELECTION:
+      if (clicked_sample > app_state->selection_drag_start) {
+        audio_state->selection_start = app_state->selection_drag_start;
+        audio_state->selection_end = clicked_sample;
+      } else {
+        audio_state->selection_start = clicked_sample;
+        audio_state->selection_end = app_state->selection_drag_start;
       }
       break;
     case INTERACTION_NONE:
@@ -486,6 +510,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->waveform_interaction_state = INTERACTION_NONE;
   state->is_hovering_selection_start = false;
   state->is_hovering_selection_end = false;
+  state->is_selection_dragging = false;
+  state->selection_drag_start = 0;
+  state->waveform_bbox = (Clay_BoundingBox){0, 0, 0, 0};
 
   state->connected_app = APP_NONE;
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
@@ -517,10 +544,37 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     Clay_SetPointerState((Clay_Vector2){x, y},
                          (button_state & SDL_BUTTON_LMASK) != 0);
 
+    SDL_Keymod mod_state = SDL_GetModState();
+    bool ctrl_pressed = mod_state & SDL_KMOD_CTRL;
+    bool shift_pressed = mod_state & SDL_KMOD_SHIFT;
+
     if (event->button.button == SDL_BUTTON_RIGHT && event->button.down) {
-      state->context_menu.x = (int)event->button.x;
-      state->context_menu.y = (int)event->button.y;
-      state->context_menu.visible = true;
+      if (ctrl_pressed && shift_pressed) {
+        if (event->button.x >= state->waveform_bbox.x &&
+            event->button.x <= state->waveform_bbox.x + state->waveform_bbox.width &&
+            event->button.y >= state->waveform_bbox.y &&
+            event->button.y <= state->waveform_bbox.y + state->waveform_bbox.height)
+        {
+            float click_x = event->button.x - state->waveform_bbox.x;
+            float waveform_width = state->waveform_bbox.width;
+            AudioState *audio_state = state->audio_state;
+
+            uint visibleSamples = (uint)(audio_state->sample->buffer_size / sizeof(float) /
+                                        state->waveform_view.zoom);
+            uint maxStartSample =
+                (audio_state->sample->buffer_size / sizeof(float)) - visibleSamples;
+            uint startSample = (uint)(state->waveform_view.scroll * maxStartSample);
+
+            uint clicked_sample =
+                startSample + (uint)((click_x / waveform_width) * visibleSamples);
+
+            audio_state->selection_end = clicked_sample;
+        }
+      } else {
+        state->context_menu.x = (int)event->button.x;
+        state->context_menu.y = (int)event->button.y;
+        state->context_menu.visible = true;
+      }
     } else if (event->button.button == SDL_BUTTON_LEFT && event->button.down) {
       state->context_menu.visible = false;
     }
@@ -561,6 +615,32 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     // Also update Clay scroll containers
     Clay_UpdateScrollContainers(
         true, (Clay_Vector2){event->wheel.x, event->wheel.y}, 0.01f);
+  } break;
+  case SDL_EVENT_KEY_DOWN: {
+    AppState *state = (AppState *)appstate;
+    SDL_Keymod mod_state = SDL_GetModState();
+    bool ctrl_pressed = mod_state & SDL_KMOD_CTRL;
+
+    switch (event->key.key) {
+    case SDLK_SPACE:
+      handlePlayPause((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+      break;
+    case SDLK_F:
+      if (ctrl_pressed) {
+        handleFileSelection((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+      }
+      break;
+    case SDLK_RETURN:
+      if (ctrl_pressed) {
+        sendMarkers((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+      }
+      break;
+    case SDLK_BACKSPACE:
+      if (ctrl_pressed) {
+        removeMarkers((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+      }
+      break;
+    }
   } break;
   default:
     break;
@@ -759,6 +839,11 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   }
 
   Clay_RenderCommandArray render_commands = Clay_EndLayout();
+
+  Clay_ElementData waveform_element = Clay_GetElementData(CLAY_ID("WaveformDisplay"));
+  if (waveform_element.found) {
+    state->waveform_bbox = waveform_element.boundingBox;
+  }
 
   SDL_SetRenderDrawColor(state->rendererData.renderer, 0, 0, 0, 255);
   SDL_RenderClear(state->rendererData.renderer);

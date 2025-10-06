@@ -54,6 +54,7 @@ void free_cara_audio(audio_data *audio) {
 
 // Audio callback function for SDL3 streaming
 static void audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount) {
+    (void)additional_amount;
     AudioState *state = (AudioState *)userdata;
     
     const int total_bytes_needed = total_amount;
@@ -72,11 +73,11 @@ static void audio_callback(void *userdata, SDL_AudioStream *stream, int addition
     int bytes_provided = 0;
 
     while (bytes_provided < total_bytes_needed) {
-        if (current_pos_samples < state->selection_start || current_pos_samples >= state->selection_end) {
+        if (current_pos_samples < (int)state->selection_start || current_pos_samples >= (int)state->selection_end) {
             current_pos_samples = state->selection_start;
         }
 
-        int samples_left_in_loop = state->selection_end - current_pos_samples;
+        int samples_left_in_loop = (int)state->selection_end - current_pos_samples;
         int bytes_left_in_loop = samples_left_in_loop * sizeof(float);
 
         int bytes_to_copy_this_iteration = total_bytes_needed - bytes_provided;
@@ -187,7 +188,7 @@ static void process_audio_file(AudioState *state) {
   SDL_LockMutex(state->data_mutex);
   if (beat_result.num_beats > 0 && beat_result.beat_times) {
     // Ensure we have enough space
-    if (beat_result.num_beats > state->beats_buffer_size) {
+    if (beat_result.num_beats > (size_t)state->beats_buffer_size) {
       state->beats_buffer_size = beat_result.num_beats * 2;
       state->beat_positions = realloc(state->beat_positions,
                                      sizeof(unsigned int) * state->beats_buffer_size);
