@@ -17,18 +17,25 @@ jobs:
       with:
         submodules: 'recursive'
 
-    - name: Install dependencies
+    - name: Install dependencies (arm64)
+      if: matrix.arch == 'arm64'
       run: brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp
+
+    - name: Install dependencies (x86_64)
+      if: matrix.arch == 'x86_64'
+      run: |
+        arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+        arch -x86_64 /usr/local/bin/brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp
 
     - name: Configure CMake
       run: >
         cmake -B build
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-        -DCMAKE_PREFIX_PATH="$(brew --prefix openblas);$(brew --prefix libomp)"
-        -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$(brew --prefix libomp)/include"
+        -DCMAKE_PREFIX_PATH="$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas);$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)"
+        -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)/include"
         -DOpenMP_C_LIB_NAMES="omp"
-        -DOpenMP_omp_LIBRARY=$(brew --prefix libomp)/lib/libomp.dylib
+        -DOpenMP_omp_LIBRARY=$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)/lib/libomp.dylib
 
     - name: Build
       run: cmake --build build --config Release
