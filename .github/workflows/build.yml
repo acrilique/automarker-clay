@@ -11,7 +11,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        arch: [arm64]
+        arch: [arm64, x86_64]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -71,3 +71,32 @@ jobs:
       with:
         name: automarker-c-windows-x64
         path: release/automarker-c-windows-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev libcurl4-openssl-dev libfftw3-dev libsndfile1-dev libopenblas-dev libomp-dev
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Package
+      run: |
+        mkdir -p release/package
+        cp build/automarker-c release/package/
+        cp -R build/resources release/package/
+        cd release
+        zip -r automarker-c-linux-x64.zip package
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: automarker-c-linux-x64
+        path: release/automarker-c-linux-x64.zip
