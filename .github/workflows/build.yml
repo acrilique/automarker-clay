@@ -33,6 +33,7 @@ jobs:
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
         -DCMAKE_PREFIX_PATH="$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas);$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)"
+        -DCMAKE_C_FLAGS="-I$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas)/include"
         -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)/include"
         -DOpenMP_C_LIB_NAMES="omp"
         -DOpenMP_omp_LIBRARY=$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)/lib/libomp.dylib
