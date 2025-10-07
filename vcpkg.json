@@ -1,0 +1,13 @@
+{
+  "dependencies": [
+    "sdl3",
+    "sdl3-image",
+    "sdl3-ttf",
+    "curl",
+    "fftw3",
+    "libsndfile",
+    "openblas",
+    "libpng"
+  ],
+  "builtin-baseline": "e62a246236f428c598fb1278eef4bdae8634069f"
+}

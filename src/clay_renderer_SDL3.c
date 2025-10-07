@@ -4,12 +4,13 @@
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3_image/SDL_image.h>
 #include <math.h>
+#include <stdlib.h>
 
 // Waveform data structure
 typedef struct {
     float* samples;      // Audio samples
     int sampleCount;     // Number of samples
-    uint* beat_positions; // Beat positions (sample indices)
+    unsigned int* beat_positions; // Beat positions (sample indices)
     int beat_count;      // Number of beats
     float currentZoom;   // Zoom level (1.0 = normal)
     float currentScroll; // Scroll position (0.0 = start)
@@ -59,19 +60,19 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
     // When zoom = 1.0, show all samples
     // When zoom > 1.0, show fewer samples (zoomed in)
     // When zoom < 1.0, still show all samples but with different sampling
-    uint visibleSamples;
+    unsigned int visibleSamples;
     if (data->currentZoom >= 1.0f) {
-        visibleSamples = (uint)(data->sampleCount / data->currentZoom);
+        visibleSamples = (unsigned int)(data->sampleCount / data->currentZoom);
     } else {
         visibleSamples = data->sampleCount; // Show all samples when zoomed out
     }
     
     int maxStartSample = (data->sampleCount > (int)visibleSamples) ? (data->sampleCount - visibleSamples) : 0;
-    uint startSample = (maxStartSample > 0) ? (uint)(data->currentScroll * maxStartSample) : 0;
+    unsigned int startSample = (maxStartSample > 0) ? (unsigned int)(data->currentScroll * maxStartSample) : 0;
     
     // Ensure we're within bounds
-    if (visibleSamples > (uint)data->sampleCount) visibleSamples = data->sampleCount;
-    if (startSample + visibleSamples > (uint)data->sampleCount) {
+    if (visibleSamples > (unsigned int)data->sampleCount) visibleSamples = data->sampleCount;
+    if (startSample + visibleSamples > (unsigned int)data->sampleCount) {
         visibleSamples = data->sampleCount - startSample;
     }
 
@@ -116,7 +117,7 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
         
         // Draw a vertical line for each beat position
         for (int i = 0; i < data->beat_count; i++) {
-            uint beatPos = data->beat_positions[i];
+            unsigned int beatPos = data->beat_positions[i];
             
             // Check if this beat is within the visible range
             if (beatPos >= startSample && beatPos < startSample + visibleSamples) {
@@ -224,8 +225,13 @@ static void SDL_Clay_RenderFillRoundedRect(Clay_SDL3RendererData *rendererData, 
     int totalVertices = 4 + (4 * (numCircleSegments * 2)) + 2*4;
     int totalIndices = 6 + (4 * (numCircleSegments * 3)) + 6*4;
 
-    SDL_Vertex vertices[totalVertices];
-    int indices[totalIndices];
+    SDL_Vertex *vertices = (SDL_Vertex *)malloc(totalVertices * sizeof(SDL_Vertex));
+    if (!vertices) return;
+    int *indices = (int *)malloc(totalIndices * sizeof(int));
+    if (!indices) {
+        free(vertices);
+        return;
+    }
 
     //define center rectangle
     vertices[vertexCount++] = (SDL_Vertex){ {rect.x + clampedRadius, rect.y + clampedRadius}, color, {0, 0} }; //0 center TL
@@ -310,6 +316,9 @@ static void SDL_Clay_RenderFillRoundedRect(Clay_SDL3RendererData *rendererData, 
 
     // Render everything
     SDL_RenderGeometry(rendererData->renderer, NULL, vertices, vertexCount, indices, indexCount);
+
+    free(vertices);
+    free(indices);
 }
 
 static void SDL_Clay_RenderArc(Clay_SDL3RendererData *rendererData, const SDL_FPoint center, const float radius, const float startAngle, const float endAngle, const float thickness, const Clay_Color color) {
@@ -324,7 +333,8 @@ static void SDL_Clay_RenderArc(Clay_SDL3RendererData *rendererData, const SDL_FP
     const float thicknessStep = 0.4f; //arbitrary value to avoid overlapping lines. Changing THICKNESS_STEP or numCircleSegments might cause artifacts.
 
     for (float t = thicknessStep; t < thickness - thicknessStep; t += thicknessStep) {
-        SDL_FPoint points[numCircleSegments + 1];
+        SDL_FPoint *points = (SDL_FPoint *)malloc((numCircleSegments + 1) * sizeof(SDL_FPoint));
+        if (!points) continue;
         const float clampedRadius = SDL_max(radius - t, 1.0f);
 
         for (int i = 0; i <= numCircleSegments; i++) {
@@ -334,6 +344,7 @@ static void SDL_Clay_RenderArc(Clay_SDL3RendererData *rendererData, const SDL_FP
                     SDL_roundf(center.y + SDL_sinf(angle) * clampedRadius) };
         }
         SDL_RenderLines(rendererData->renderer, points, numCircleSegments + 1);
+        free(points);
     }
 }
 

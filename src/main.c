@@ -23,21 +23,21 @@ static const Uint32 FONT_REGULAR = 0;
 static const Uint32 FONT_SMALL = 1;
 
 // General colors
-static const Clay_Color COLOR_BG_DARK = (Clay_Color){43, 41, 51, 255};
-static const Clay_Color COLOR_BG_LIGHT = (Clay_Color){90, 90, 90, 255};
-static const Clay_Color COLOR_WHITE = (Clay_Color){255, 244, 244, 255};
-static const Clay_Color COLOR_ACCENT = (Clay_Color){140, 140, 140, 255};
+static const Clay_Color COLOR_BG_DARK = {43, 41, 51, 255};
+static const Clay_Color COLOR_BG_LIGHT = {90, 90, 90, 255};
+static const Clay_Color COLOR_WHITE = {255, 244, 244, 255};
+static const Clay_Color COLOR_ACCENT = {140, 140, 140, 255};
 
 // Button colors
-static const Clay_Color COLOR_BUTTON_BG = (Clay_Color){140, 140, 140, 255};
+static const Clay_Color COLOR_BUTTON_BG = {140, 140, 140, 255};
 static const Clay_Color COLOR_BUTTON_BG_HOVER =
-    (Clay_Color){160, 160, 160, 255};
+    {160, 160, 160, 255};
 
 // Waveform colors
-static const Clay_Color COLOR_WAVEFORM_BG = (Clay_Color){60, 60, 60, 255};
-static const Clay_Color COLOR_WAVEFORM_LINE = (Clay_Color){255, 255, 255, 255};
+static const Clay_Color COLOR_WAVEFORM_BG = {60, 60, 60, 255};
+static const Clay_Color COLOR_WAVEFORM_LINE = {255, 255, 255, 255};
 static const Clay_Color COLOR_WAVEFORM_BEAT =
-    (Clay_Color){255, 255, 0, 255};
+    {255, 255, 0, 255};
 
 typedef struct {
   float zoom;   // Zoom level (1.0 = normal)
@@ -82,7 +82,7 @@ typedef struct app_state {
   bool is_hovering_selection_start;
   bool is_hovering_selection_end;
   bool is_selection_dragging;
-  uint selection_drag_start;
+  unsigned int selection_drag_start;
   Clay_BoundingBox waveform_bbox;
 
   // Tooltip state
@@ -254,11 +254,11 @@ static void handleWaveformInteraction(Clay_ElementId elementId,
   float click_x = pointerData.position.x - waveform_element.boundingBox.x;
   float waveform_width = waveform_element.boundingBox.width;
 
-  uint visibleSamples = (uint)(audio_state->sample->buffer_size / sizeof(float) /
+  unsigned int visibleSamples = (unsigned int)(audio_state->sample->buffer_size / sizeof(float) /
                                app_state->waveform_view.zoom);
-  uint maxStartSample =
+  unsigned int maxStartSample =
       (audio_state->sample->buffer_size / sizeof(float)) - visibleSamples;
-  uint startSample = (uint)(app_state->waveform_view.scroll * maxStartSample);
+  unsigned int startSample = (unsigned int)(app_state->waveform_view.scroll * maxStartSample);
 
   // --- Hover detection ---
   const float hover_threshold = 5.0f; // 5 pixels tolerance
@@ -293,8 +293,8 @@ static void handleWaveformInteraction(Clay_ElementId elementId,
   }
 
   // --- Interaction logic ---
-  uint clicked_sample =
-      startSample + (uint)((click_x / waveform_width) * visibleSamples);
+  unsigned int clicked_sample =
+      startSample + (unsigned int)((click_x / waveform_width) * visibleSamples);
 
   SDL_Keymod mod_state = SDL_GetModState();
   bool ctrl_pressed = mod_state & SDL_KMOD_CTRL;
@@ -593,14 +593,14 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
             float waveform_width = state->waveform_bbox.width;
             AudioState *audio_state = state->audio_state;
 
-            uint visibleSamples = (uint)(audio_state->sample->buffer_size / sizeof(float) /
+            unsigned int visibleSamples = (unsigned int)(audio_state->sample->buffer_size / sizeof(float) /
                                         state->waveform_view.zoom);
-            uint maxStartSample =
+            unsigned int maxStartSample =
                 (audio_state->sample->buffer_size / sizeof(float)) - visibleSamples;
-            uint startSample = (uint)(state->waveform_view.scroll * maxStartSample);
+            unsigned int startSample = (unsigned int)(state->waveform_view.scroll * maxStartSample);
 
-            uint clicked_sample =
-                startSample + (uint)((click_x / waveform_width) * visibleSamples);
+            unsigned int clicked_sample =
+                startSample + (unsigned int)((click_x / waveform_width) * visibleSamples);
 
             audio_state->selection_end = clicked_sample;
         }

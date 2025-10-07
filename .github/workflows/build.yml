@@ -1,0 +1,73 @@
+name: Build
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp
+
+    - name: Configure CMake
+      run: >
+        cmake -B build
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+        -DCMAKE_PREFIX_PATH="$(brew --prefix openblas);$(brew --prefix libomp)"
+        -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$(brew --prefix libomp)/include"
+        -DOpenMP_C_LIB_NAMES="omp"
+        -DOpenMP_omp_LIBRARY=$(brew --prefix libomp)/lib/libomp.dylib
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Package
+      run: |
+        mkdir -p release/package
+        cp build/Release/automarker-c release/package/
+        cp -R build/Release/resources release/package/
+        cd release
+        zip -r automarker-c-macos-${{ matrix.arch }}.zip package
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: automarker-c-macos-${{ matrix.arch }}
+        path: release/automarker-c-macos-${{ matrix.arch }}.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Set up vcpkg
+      uses: lukka/run-vcpkg@v11
+
+    - name: Configure CMake
+      run: cmake -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Package
+      run: |
+        mkdir release
+        7z a release/automarker-c-windows-x64.zip ./build/Release/*
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: automarker-c-windows-x64
+        path: release/automarker-c-windows-x64.zip
