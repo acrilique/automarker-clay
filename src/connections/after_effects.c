@@ -1,4 +1,5 @@
 #include "after_effects.h"
+#include "process_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,10 +47,13 @@ static void run_jsx_script(const char *script_content) {
     fclose(fp);
 
 #ifdef _WIN32
-    // On Windows, we assume aerender.exe is in the path
-    char command[2048];
-    snprintf(command, sizeof(command), "aerender -project \"\" -comp \"\" -output \"%s.aep\" -s 1 -e 1 -r \"%s\"", temp_path, temp_path);
-    system(command);
+    char* ae_path = get_after_effects_path();
+    if (ae_path) {
+        char command[2048];
+        snprintf(command, sizeof(command), "\"%s\" -ro \"%s\"", ae_path, temp_path);
+        system(command);
+        free(ae_path);
+    }
 #else
     // On macOS, we use osascript
     char command[2048];

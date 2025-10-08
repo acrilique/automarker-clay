@@ -15,4 +15,8 @@
 
 bool is_process_running(const char *process_name);
 
+#ifdef _WIN32
+char* get_after_effects_path(void);
+#endif
+
 #endif // PROCESS_UTILS_H

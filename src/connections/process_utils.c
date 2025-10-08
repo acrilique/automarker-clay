@@ -11,6 +11,50 @@
 #include <unistd.h>
 #endif
 
+#ifdef _WIN32
+char* get_after_effects_path(void) {
+    HKEY hkey;
+    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, KEY_READ, &hkey) != ERROR_SUCCESS) {
+        return NULL;
+    }
+
+    char subkey_name[255];
+    DWORD subkey_name_size = sizeof(subkey_name);
+    DWORD index = 0;
+    char *install_location = NULL;
+
+    while (RegEnumKeyEx(hkey, index, subkey_name, &subkey_name_size, NULL, NULL, NULL, NULL) == ERROR_SUCCESS) {
+        HKEY subkey;
+        if (RegOpenKeyEx(hkey, subkey_name, 0, KEY_READ, &subkey) == ERROR_SUCCESS) {
+            char display_name[255];
+            DWORD display_name_size = sizeof(display_name);
+            if (RegQueryValueEx(subkey, "DisplayName", NULL, NULL, (LPBYTE)display_name, &display_name_size) == ERROR_SUCCESS) {
+                if (strstr(display_name, "Adobe After Effects") != NULL) {
+                    char location[1024];
+                    DWORD location_size = sizeof(location);
+                    if (RegQueryValueEx(subkey, "InstallLocation", NULL, NULL, (LPBYTE)location, &location_size) == ERROR_SUCCESS) {
+                        char *ae_path = malloc(1024);
+                        snprintf(ae_path, 1024, "%s\\Support Files\\AfterFX.exe", location);
+                        if (access(ae_path, F_OK) == 0) {
+                            if (install_location) free(install_location);
+                            install_location = ae_path;
+                        } else {
+                            free(ae_path);
+                        }
+                    }
+                }
+            }
+            RegCloseKey(subkey);
+        }
+        subkey_name_size = sizeof(subkey_name);
+        index++;
+    }
+
+    RegCloseKey(hkey);
+    return install_location;
+}
+#endif
+
 bool is_process_running(const char *process_name) {
 #ifdef _WIN32
     PROCESSENTRY32 entry;
