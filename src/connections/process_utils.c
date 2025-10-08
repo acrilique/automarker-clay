@@ -4,12 +4,15 @@
 #include <string.h>
 
 #ifdef _WIN32
-#include <windows.h>
-#include <io.h>
-#include <tlhelp32.h>
+    #include <windows.h>
+    #include <io.h>
+    #include <tlhelp32.h>
+    #ifndef F_OK
+        #define F_OK   0
+    #endif
 #else
-#include <dirent.h>
-#include <unistd.h>
+    #include <dirent.h>
+    #include <unistd.h>
 #endif
 
 #ifdef _WIN32
