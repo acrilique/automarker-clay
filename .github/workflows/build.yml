@@ -160,10 +160,10 @@ jobs:
     - name: Package
       run: |
         mkdir -p release/package/lib
-        cp build/automarker-c release/package/
-        cp -R build/resources release/package/
+        cp build/Release/automarker-c release/package/
+        cp -R build/Release/resources release/package/
 
-        DEPS=$(ldd build/automarker-c | grep "=> /" | awk '{print $3}')
+        DEPS=$(ldd build/Release/automarker-c | grep "=> /" | awk '{print $3}')
 
         for DEP in $DEPS; do
           cp $DEP release/package/lib/
