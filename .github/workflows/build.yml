@@ -147,12 +147,10 @@ jobs:
       run: >
         cmake -B build
         -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_PREFIX_PATH="/usr/lib/openblas-base;/usr/lib/x86_64-linux-gnu/libomp5"
+        -DCMAKE_PREFIX_PATH="/usr/lib/openblas-base"
         -DCMAKE_C_FLAGS="-I/usr/include/openblas"
-        -DCMAKE_EXE_LINKER_FLAGS="-L/usr/lib"
-        -DOpenMP_C_FLAGS="-fopenmp -I/usr/include"
+        -DOpenMP_C_FLAGS="-fopenmp"
         -DOpenMP_C_LIB_NAMES="omp"
-        -DOpenMP_omp_LIBRARY="/usr/lib/x86_64-linux-gnu/libomp.so"
 
     - name: Build
       run: cmake --build build --config Release
