@@ -5,6 +5,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
 #include <tlhelp32.h>
 #else
 #include <dirent.h>
@@ -35,7 +36,7 @@ char* get_after_effects_path(void) {
                     if (RegQueryValueEx(subkey, "InstallLocation", NULL, NULL, (LPBYTE)location, &location_size) == ERROR_SUCCESS) {
                         char *ae_path = malloc(1024);
                         snprintf(ae_path, 1024, "%s\\Support Files\\AfterFX.exe", location);
-                        if (access(ae_path, F_OK) == 0) {
+                        if (_access(ae_path, F_OK) == 0) {
                             if (install_location) free(install_location);
                             install_location = ae_path;
                         } else {
