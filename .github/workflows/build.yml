@@ -97,3 +97,83 @@ jobs:
       with:
         name: automarker-c-windows-x64
         path: release/automarker-c-windows-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake curl libfftw3-dev libsndfile1-dev libopenblas-dev libomp-dev libpng-dev
+
+    - name: Build and install SDL3
+      run: |
+        git clone https://github.com/libsdl-org/SDL.git -b SDL3
+        cd SDL
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        make -j$(nproc)
+        sudo make install
+        cd ../..
+
+    - name: Build and install SDL3_image
+      run: |
+        git clone https://github.com/libsdl-org/SDL_image.git -b SDL3
+        cd SDL_image
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        make -j$(nproc)
+        sudo make install
+        cd ../..
+
+    - name: Build and install SDL3_ttf
+      run: |
+        git clone https://github.com/libsdl-org/SDL_ttf.git -b SDL3
+        cd SDL_ttf
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        make -j$(nproc)
+        sudo make install
+        cd ../..
+
+    - name: Configure CMake
+      run: >
+        cmake -B build
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_PREFIX_PATH="/usr/lib/openblas-base;/usr/lib/x86_64-linux-gnu/libomp5"
+        -DCMAKE_C_FLAGS="-I/usr/include/openblas"
+        -DCMAKE_EXE_LINKER_FLAGS="-L/usr/lib"
+        -DOpenMP_C_FLAGS="-fopenmp -I/usr/include"
+        -DOpenMP_C_LIB_NAMES="omp"
+        -DOpenMP_omp_LIBRARY="/usr/lib/x86_64-linux-gnu/libomp.so"
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Package
+      run: |
+        mkdir -p release/package/lib
+        cp build/automarker-c release/package/
+        cp -R build/resources release/package/
+
+        DEPS=$(ldd build/automarker-c | grep "=> /" | awk '{print $3}')
+
+        for DEP in $DEPS; do
+          cp $DEP release/package/lib/
+        done
+
+        cd release
+        zip -r automarker-c-linux-x64.zip package
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: automarker-c-linux-x64
+        path: release/automarker-c-linux-x64.zip
