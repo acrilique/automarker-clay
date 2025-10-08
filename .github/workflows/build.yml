@@ -112,7 +112,7 @@ jobs:
 
     - name: Build and install SDL3
       run: |
-        git clone https://github.com/libsdl-org/SDL.git -b SDL3
+        git clone https://github.com/libsdl-org/SDL.git
         cd SDL
         mkdir build
         cd build
@@ -123,7 +123,7 @@ jobs:
 
     - name: Build and install SDL3_image
       run: |
-        git clone https://github.com/libsdl-org/SDL_image.git -b SDL3
+        git clone https://github.com/libsdl-org/SDL_image.git
         cd SDL_image
         mkdir build
         cd build
@@ -134,7 +134,7 @@ jobs:
 
     - name: Build and install SDL3_ttf
       run: |
-        git clone https://github.com/libsdl-org/SDL_ttf.git -b SDL3
+        git clone https://github.com/libsdl-org/SDL_ttf.git
         cd SDL_ttf
         mkdir build
         cd build
