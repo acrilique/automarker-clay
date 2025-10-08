@@ -144,13 +144,15 @@ jobs:
         cd ../..
 
     - name: Configure CMake
-      run: >
-        cmake -B build
-        -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_PREFIX_PATH="/usr/lib/openblas-base"
-        -DCMAKE_C_FLAGS="-I/usr/include/openblas"
-        -DOpenMP_C_FLAGS="-fopenmp"
-        -DOpenMP_C_LIB_NAMES="omp"
+      run: |
+        LIBOMP_PATH=$(find /usr/lib -name "libomp.so")
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_PREFIX_PATH="/usr/lib/openblas-base" \
+          -DCMAKE_C_FLAGS="-I/usr/include/openblas" \
+          -DOpenMP_C_FLAGS="-fopenmp" \
+          -DOpenMP_C_LIB_NAMES="omp" \
+          -DOpenMP_omp_LIBRARY="$LIBOMP_PATH"
 
     - name: Build
       run: cmake --build build --config Release
