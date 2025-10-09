@@ -489,18 +489,30 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 
-  TTF_Font *font_regular = TTF_OpenFont("resources/Roboto-Regular.ttf", 22);
+  char *base_path = SDL_GetBasePath();
+  if (!base_path) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get base path: %s", SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
+
+  char resource_path[1024];
+
+  // Load Fonts
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/Roboto-Regular.ttf");
+  TTF_Font *font_regular = TTF_OpenFont(resource_path, 22);
   if (!font_regular) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load regular font: %s",
                  SDL_GetError());
+    SDL_free(base_path);
     return SDL_APP_FAILURE;
   }
   state->rendererData.fonts[FONT_REGULAR] = font_regular;
 
-  TTF_Font *font_small = TTF_OpenFont("resources/Roboto-Regular.ttf", 14);
+  TTF_Font *font_small = TTF_OpenFont(resource_path, 14);
   if (!font_small) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load small font: %s",
                  SDL_GetError());
+    SDL_free(base_path);
     return SDL_APP_FAILURE;
   }
   state->rendererData.fonts[FONT_SMALL] = font_small;
@@ -516,13 +528,23 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
                   (Clay_ErrorHandler){HandleClayErrors, 0});
   Clay_SetMeasureTextFunction(SDL_MeasureText, state->rendererData.fonts);
 
-  state->file_icon = IMG_Load("resources/file.svg");
-  state->play_icon = IMG_Load("resources/play_pause.svg");
-  state->send_icon = IMG_Load("resources/send.svg");
-  state->remove_icon = IMG_Load("resources/remove.svg");
-  state->help_icon = IMG_Load("resources/help.svg");
-  state->mark_in_icon = IMG_Load("resources/mark_in.svg");
-  state->mark_out_icon = IMG_Load("resources/mark_out.svg");
+  // Load Icons
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/file.svg");
+  state->file_icon = IMG_Load(resource_path);
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/play_pause.svg");
+  state->play_icon = IMG_Load(resource_path);
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/send.svg");
+  state->send_icon = IMG_Load(resource_path);
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/remove.svg");
+  state->remove_icon = IMG_Load(resource_path);
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/help.svg");
+  state->help_icon = IMG_Load(resource_path);
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_in.svg");
+  state->mark_in_icon = IMG_Load(resource_path);
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_out.svg");
+  state->mark_out_icon = IMG_Load(resource_path);
+
+  SDL_free(base_path);
 
   state->audio_state = audio_state_create();
   if (!state->audio_state) {
