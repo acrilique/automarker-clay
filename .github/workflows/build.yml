@@ -49,18 +49,24 @@ jobs:
         cp -R build/Release/resources release/package/
 
         BREW_PREFIX=$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix)
-        DEPS=$(otool -L build/Release/automarker-c | grep $BREW_PREFIX | awk '{print $1}')
+        DEPS=$(otool -L release/package/automarker-c | grep $BREW_PREFIX | awk '{print $1}')
 
         for DEP in $DEPS; do
           cp $DEP release/package/lib/
         done
 
-        install_name_tool -add_rpath @executable_path/lib build/Release/automarker-c
+        install_name_tool -add_rpath @executable_path/lib release/package/automarker-c
+
+        for DEP in $DEPS; do
+          install_name_tool -change $DEP @rpath/$(basename $DEP) release/package/automarker-c
+        done
 
         for LIB in release/package/lib/*.dylib; do
           SUB_DEPS=$(otool -L $LIB | grep $BREW_PREFIX | awk '{print $1}')
           for SUB_DEP in $SUB_DEPS; do
-            install_name_tool -change $SUB_DEP @rpath/$(basename $SUB_DEP) $LIB
+            if [ -f "release/package/lib/$(basename $SUB_DEP)" ]; then
+              install_name_tool -change $SUB_DEP @rpath/$(basename $SUB_DEP) $LIB
+            fi
           done
         done
 
