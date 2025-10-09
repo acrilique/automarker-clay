@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.27)
 project(automarker-c C)
 set(CMAKE_C_STANDARD 99)
 
+option(MACOS_BUNDLE "Create a macOS bundle structure" OFF)
+
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -g")
 # if not on macos, add -pg for profiling
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -11,8 +13,13 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
+if(MACOS_BUNDLE)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/bin")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>/lib")
+else()
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
+endif()
 
 if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
     find_package(SDL3 CONFIG REQUIRED)
@@ -37,10 +44,24 @@ endif()
 
 add_executable(${PROJECT_NAME} src/main.c src/audio_state.c src/connections/process_utils.c src/connections/premiere_pro.c src/connections/after_effects.c src/connections/resolve.c libs/tinyfiledialogs/tinyfiledialogs.c)
 
+if(MACOS_BUNDLE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MACOS_BUNDLE)
+endif()
+
 # Set rpath for the executable to find the shared libraries at runtime
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    if(MACOS_BUNDLE)
+        set(RPATH_VALUE "@executable_path/../lib")
+    else()
+        set(RPATH_VALUE "@executable_path")
+    endif()
+else()
+    set(RPATH_VALUE "$ORIGIN")
+endif()
+
 set_target_properties(${PROJECT_NAME} PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH "@executable_path"
+    INSTALL_RPATH "${RPATH_VALUE}"
 )
 
 if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")

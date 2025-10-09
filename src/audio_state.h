@@ -25,7 +25,7 @@ typedef enum {
 // Main audio state structure (consolidates AudioTrack + adds playback)
 typedef struct {
     // File and decoding
-    const char *file_path;
+    char *file_path;
     Sound_Sample *sample;
     
     // Beat detection

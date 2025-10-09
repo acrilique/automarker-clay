@@ -498,7 +498,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   char resource_path[1024];
 
   // Load Fonts
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/Roboto-Regular.ttf");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/Roboto-Regular.ttf");
+#endif
   TTF_Font *font_regular = TTF_OpenFont(resource_path, 22);
   if (!font_regular) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load regular font: %s",
@@ -527,49 +531,77 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   Clay_SetMeasureTextFunction(SDL_MeasureText, state->rendererData.fonts);
 
   // Load Icons
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/file.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/file.svg");
+#endif
   state->file_icon = IMG_Load(resource_path);
   if (!state->file_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load file icon: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/play_pause.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/play_pause.svg");
+#endif
   state->play_icon = IMG_Load(resource_path);
   if (!state->play_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load play icon: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/send.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/send.svg");
+#endif
   state->send_icon = IMG_Load(resource_path);
   if (!state->send_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load send icon: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/remove.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/remove.svg");
+#endif
   state->remove_icon = IMG_Load(resource_path);
   if (!state->remove_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load remove icon: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/help.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/help.svg");
+#endif
   state->help_icon = IMG_Load(resource_path);
   if (!state->help_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load help icon: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/mark_in.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_in.svg");
+#endif
   state->mark_in_icon = IMG_Load(resource_path);
   if (!state->mark_in_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load mark in icon: %s",
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/mark_out.svg");
+#else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_out.svg");
+#endif
   state->mark_out_icon = IMG_Load(resource_path);
   if (!state->mark_out_icon) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load mark out icon: %s",

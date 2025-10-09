@@ -322,6 +322,7 @@ AudioState* audio_state_create(void) {
 void audio_state_load_file(AudioState *state, const char *file_path) {
     if (!state || !file_path) return;
 
+    // Stop playback and clean up any existing audio stream/device
     audio_state_stop_playback(state);
     if (state->audio_stream) {
         SDL_DestroyAudioStream(state->audio_stream);
@@ -332,22 +333,42 @@ void audio_state_load_file(AudioState *state, const char *file_path) {
         state->audio_device = 0;
     }
     
-    // Wait for any existing processing to finish
-    SDL_LockMutex(state->data_mutex);
-    bool is_processing = (state->status == STATUS_DECODE || 
-                         state->status == STATUS_BEAT_ANALYSIS);
-    SDL_UnlockMutex(state->data_mutex);
-    
-    if (is_processing) return;
-    
+    // Wait for any existing processing to finish before loading a new file
     if (state->processing_thread) {
+        SDL_SetAtomicInt(&state->request_stop, 1);
         SDL_WaitThread(state->processing_thread, NULL);
         state->processing_thread = NULL;
+        SDL_SetAtomicInt(&state->request_stop, 0); // Reset for next operation
+    }
+
+    // Clean up all data related to the previous file
+    if (state->file_path) {
+        free(state->file_path);
+        state->file_path = NULL;
+    }
+    if (state->sample) {
+        Sound_FreeSample(state->sample);
+        state->sample = NULL;
+    }
+    if (state->beat_positions) {
+        free(state->beat_positions);
+        state->beat_positions = NULL;
+        state->beat_count = 0;
+    }
+    if (state->playback_buffer) {
+        free(state->playback_buffer);
+        state->playback_buffer = NULL;
+        state->playback_buffer_size = 0;
     }
     
-    state->file_path = file_path;
+    // Now, create a persistent copy of the new file path
+    state->file_path = strdup(file_path);
+    if (!state->file_path) {
+        printf("Error: Could not allocate memory for file path.\n");
+        return;
+    }
     
-    // Start processing thread
+    // Start the processing thread for the new file
     state->processing_thread = SDL_CreateThread(
         audio_processing_thread, "AudioProcessing", state);
     
@@ -406,6 +427,7 @@ void audio_state_destroy(AudioState *state) {
     // Stop any ongoing playback
     audio_state_stop_playback(state);
 
+    // Clean up streaming resources
     if (state->audio_stream) {
         SDL_DestroyAudioStream(state->audio_stream);
         state->audio_stream = NULL;
@@ -415,28 +437,33 @@ void audio_state_destroy(AudioState *state) {
         state->audio_device = 0;
     }
     
+    // Ensure processing thread is finished
     if (state->processing_thread) {
         SDL_SetAtomicInt(&state->request_stop, 1);
         SDL_WaitThread(state->processing_thread, NULL);
         state->processing_thread = NULL;
     }
     
+    // Destroy mutex
     if (state->data_mutex) {
         SDL_DestroyMutex(state->data_mutex);
     }
     
+    // Free all dynamically allocated memory
+    if (state->file_path) {
+        free(state->file_path);
+    }
     if (state->sample) {
         Sound_FreeSample(state->sample);
     }
-    
     if (state->beat_positions) {
         free(state->beat_positions);
     }
-    
     if (state->playback_buffer) {
         free(state->playback_buffer);
     }
     
+    // Finally, free the state struct itself
     SDL_free(state);
 }
 

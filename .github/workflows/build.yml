@@ -31,6 +31,7 @@ jobs:
       run: >
         cmake -B build
         -DCMAKE_BUILD_TYPE=Release
+        -DMACOS_BUNDLE=ON
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
         -DCMAKE_PREFIX_PATH="$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas);$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp);$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libpng)"
         -DCMAKE_C_FLAGS="-I$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas)/include"
@@ -42,80 +43,31 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
+    - name: Install dylibbundler
+      run: brew install dylibbundler
+
     - name: Package
       run: |
-        set -e # Exit immediately if a command exits with a non-zero status.
+        set -e
+        # Create the new directory structure
+        mkdir -p release/package/bin
         mkdir -p release/package/lib
-        cp build/Release/automarker-c release/package/
+        
+        # Copy files to their new locations
+        cp build/Release/bin/automarker-c release/package/bin/
         cp -R build/Release/resources release/package/
+        # Pre-copy the SDL_sound library to where the executable is,
+        # so dylibbundler can find it before moving it.
+        cp build/Release/lib/libSDL3_sound.3.dylib release/package/bin/
 
-        BREW_PREFIX=$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix)
+        # --- Bundle Dependencies ---
+        dylibbundler -od -b -x ./release/package/bin/automarker-c -d ./release/package/lib/
 
-        # Function to recursively copy dependencies
-        copy_dependencies() {
-            local file_path=$1
-            echo "Checking dependencies for: $file_path"
-            local file_dir=$(dirname "$file_path")
-
-            # Get all non-system dependencies
-            local deps_output=$(otool -L "$file_path" | tail -n +2 | awk '{print $1}' | sed 's/://')
-
-            for dep in $deps_output; do
-                local resolved_dep=""
-                if [[ "$dep" == @rpath* ]]; then
-                    # Assume @rpath dependency is relative to the file's directory
-                    local dep_filename=${dep#@rpath/}
-                    resolved_dep="$file_dir/$dep_filename"
-                elif [[ "$dep" == /* ]] && [[ "$dep" != /usr/lib* ]] && [[ "$dep" != /System/Library* ]]; then
-                    resolved_dep=$dep
-                fi
-
-                if [ -n "$resolved_dep" ] && [ -f "$resolved_dep" ]; then
-                    if [ ! -f "release/package/lib/$(basename "$resolved_dep")" ]; then
-                        echo "Copying dependency: $(basename "$resolved_dep")"
-                        cp "$resolved_dep" release/package/lib/
-                        copy_dependencies "$resolved_dep"
-                    fi
-                fi
-            done
-        }
-
-        # Start with the main executable
-        copy_dependencies "release/package/automarker-c"
-
-        # Copy local SDL_sound and its dependencies
-        if [ -f "build/Release/libSDL3_sound.3.dylib" ]; then
-            echo "Copying local dependency: libSDL3_sound.3.dylib"
-            cp "build/Release/libSDL3_sound.3.dylib" "release/package/lib/"
-            copy_dependencies "build/Release/libSDL3_sound.3.dylib"
-        fi
-
-        # --- Now fix all the rpaths ---
-        echo "Fixing rpaths..."
-        # Add rpath to the executable
-        install_name_tool -add_rpath @executable_path/lib release/package/automarker-c
-
-        # Fix paths for the executable
-        EXEC_DEPS=$(otool -L release/package/automarker-c | grep -E "($BREW_PREFIX|libSDL3_sound|@rpath)" | awk '{print $1}')
-        for DEP in $EXEC_DEPS; do
-            install_name_tool -change "$DEP" "@rpath/$(basename "$DEP")" "release/package/automarker-c"
-        done
-
-        # Fix paths for all the copied libraries
-        for LIB in release/package/lib/*.dylib; do
-            # Fix its own ID
-            install_name_tool -id "@rpath/$(basename "$LIB")" "$LIB"
-
-            # Fix its dependencies
-            SUB_DEPS=$(otool -L "$LIB" | grep -E "($BREW_PREFIX|@rpath)" | awk '{print $1}')
-            for SUB_DEP in $SUB_DEPS; do
-                install_name_tool -change "$SUB_DEP" "@rpath/$(basename "$SUB_DEP")" "$LIB"
-            done
-        done
-
+        # --- Create Zip Archive ---
         echo "Packaging complete."
         cd release
         zip -r automarker-c-macos-${{ matrix.arch }}.zip package
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
