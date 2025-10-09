@@ -35,12 +35,13 @@ if(EXISTS "/usr/include/openblas")
     include_directories("/usr/include/openblas")
 endif()
 
-# Set rpath for the executable to find the shared libraries at runtime
-set(CMAKE_INSTALL_RPATH "$ORIGIN")
-set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-
-# Example executable
 add_executable(${PROJECT_NAME} src/main.c src/audio_state.c src/connections/process_utils.c src/connections/premiere_pro.c src/connections/after_effects.c src/connections/resolve.c libs/tinyfiledialogs/tinyfiledialogs.c)
+
+# Set rpath for the executable to find the shared libraries at runtime
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "@executable_path"
+)
 
 if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
     target_link_libraries(${PROJECT_NAME} PRIVATE
