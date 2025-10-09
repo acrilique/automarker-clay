@@ -54,14 +54,28 @@ jobs:
         # Function to recursively copy dependencies
         copy_dependencies() {
             local file_path=$1
-            echo "Checking dependencies for $file_path"
-            local deps=$(otool -L "$file_path" | grep "$BREW_PREFIX" | awk '{print $1}' | sed 's/://')
+            echo "Checking dependencies for: $file_path"
+            local file_dir=$(dirname "$file_path")
 
-            for dep in $deps; do
-                if [ ! -f "release/package/lib/$(basename "$dep")" ]; then
-                    echo "Copying dependency: $(basename "$dep")"
-                    cp "$dep" release/package/lib/
-                    copy_dependencies "$dep"
+            # Get all non-system dependencies
+            local deps_output=$(otool -L "$file_path" | tail -n +2 | awk '{print $1}' | sed 's/://')
+
+            for dep in $deps_output; do
+                local resolved_dep=""
+                if [[ "$dep" == @rpath* ]]; then
+                    # Assume @rpath dependency is relative to the file's directory
+                    local dep_filename=${dep#@rpath/}
+                    resolved_dep="$file_dir/$dep_filename"
+                elif [[ "$dep" == /* ]] && [[ "$dep" != /usr/lib* ]] && [[ "$dep" != /System/Library* ]]; then
+                    resolved_dep=$dep
+                fi
+
+                if [ -n "$resolved_dep" ] && [ -f "$resolved_dep" ]; then
+                    if [ ! -f "release/package/lib/$(basename "$resolved_dep")" ]; then
+                        echo "Copying dependency: $(basename "$resolved_dep")"
+                        cp "$resolved_dep" release/package/lib/
+                        copy_dependencies "$resolved_dep"
+                    fi
                 fi
             done
         }
@@ -73,7 +87,6 @@ jobs:
         if [ -f "build/Release/libSDL3_sound.3.dylib" ]; then
             echo "Copying local dependency: libSDL3_sound.3.dylib"
             cp "build/Release/libSDL3_sound.3.dylib" "release/package/lib/"
-            # After copying, recurse on the original file to find its dependencies
             copy_dependencies "build/Release/libSDL3_sound.3.dylib"
         fi
 
