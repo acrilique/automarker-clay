@@ -70,10 +70,11 @@ jobs:
         copy_dependencies "release/package/automarker-c"
 
         # Copy local SDL_sound and its dependencies
-        if [ -f "build/libs/SDL_sound/libSDL3_sound.3.dylib" ]; then
+        if [ -f "build/Release/libSDL3_sound.3.dylib" ]; then
             echo "Copying local dependency: libSDL3_sound.3.dylib"
-            cp "build/libs/SDL_sound/libSDL3_sound.3.dylib" "release/package/lib/"
-            copy_dependencies "release/package/lib/libSDL3_sound.3.dylib"
+            cp "build/Release/libSDL3_sound.3.dylib" "release/package/lib/"
+            # After copying, recurse on the original file to find its dependencies
+            copy_dependencies "build/Release/libSDL3_sound.3.dylib"
         fi
 
         # --- Now fix all the rpaths ---
