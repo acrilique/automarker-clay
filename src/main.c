@@ -503,7 +503,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   if (!font_regular) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load regular font: %s",
                  SDL_GetError());
-    SDL_free(base_path);
     return SDL_APP_FAILURE;
   }
   state->rendererData.fonts[FONT_REGULAR] = font_regular;
@@ -512,7 +511,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   if (!font_small) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load small font: %s",
                  SDL_GetError());
-    SDL_free(base_path);
     return SDL_APP_FAILURE;
   }
   state->rendererData.fonts[FONT_SMALL] = font_small;
@@ -531,18 +529,53 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   // Load Icons
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/file.svg");
   state->file_icon = IMG_Load(resource_path);
+  if (!state->file_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load file icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/play_pause.svg");
   state->play_icon = IMG_Load(resource_path);
+  if (!state->play_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load play icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/send.svg");
   state->send_icon = IMG_Load(resource_path);
+  if (!state->send_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load send icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/remove.svg");
   state->remove_icon = IMG_Load(resource_path);
+  if (!state->remove_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load remove icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/help.svg");
   state->help_icon = IMG_Load(resource_path);
+  if (!state->help_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load help icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_in.svg");
   state->mark_in_icon = IMG_Load(resource_path);
+  if (!state->mark_in_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load mark in icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_out.svg");
   state->mark_out_icon = IMG_Load(resource_path);
+  if (!state->mark_out_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load mark out icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
 
   SDL_free(base_path);
 
