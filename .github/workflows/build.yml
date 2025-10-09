@@ -55,7 +55,7 @@ jobs:
         copy_dependencies() {
             local file_path=$1
             echo "Checking dependencies for $file_path"
-            local deps=$(otool -L "$file_path" | grep "$BREW_PREFIX" | awk '{print $1}')
+            local deps=$(otool -L "$file_path" | grep "$BREW_PREFIX" | awk '{print $1}' | sed 's/://')
 
             for dep in $deps; do
                 if [ ! -f "release/package/lib/$(basename "$dep")" ]; then
