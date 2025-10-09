@@ -55,6 +55,10 @@ jobs:
           cp $DEP release/package/lib/
         done
 
+        if [ -f "build/Release/libSDL3_sound.3.dylib" ]; then
+          cp build/Release/libSDL3_sound.3.dylib release/package/lib/
+        fi
+
         install_name_tool -add_rpath @executable_path/lib release/package/automarker-c
 
         for DEP in $DEPS; do
