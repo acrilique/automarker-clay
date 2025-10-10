@@ -42,7 +42,14 @@ if(EXISTS "/usr/include/openblas")
     include_directories("/usr/include/openblas")
 endif()
 
-add_executable(${PROJECT_NAME} src/main.c src/audio_state.c src/connections/process_utils.c src/connections/premiere_pro.c src/connections/after_effects.c src/connections/resolve.c libs/tinyfiledialogs/tinyfiledialogs.c)
+add_executable(${PROJECT_NAME}
+    src/main.c
+    src/audio_state.c
+    src/connections/process_utils.c
+    src/connections/premiere_pro.c
+    src/connections/after_effects.c
+    src/connections/resolve.c
+    libs/tinyfiledialogs/tinyfiledialogs.c)
 
 if(MACOS_BUNDLE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE MACOS_BUNDLE)

@@ -59,7 +59,14 @@ typedef enum {
   INTERACTION_DRAGGING_SELECTION
 } WaveformInteractionState;
 
-typedef struct app_state {
+typedef struct app_state AppState;
+
+typedef struct {
+  bool visible;
+  void (*render_content)(AppState *app_state);
+} ModalState;
+
+struct app_state {
   SDL_Window *window;
   ConnectedApp connected_app;
   SDL_Thread *app_status_thread;
@@ -89,7 +96,10 @@ typedef struct app_state {
   bool is_tooltip_visible;
   const char *tooltip_text;
   Clay_ElementId tooltip_target_id;
-} AppState;
+
+  // Modal state
+  ModalState modal;
+};
 
 
 static int get_window_width(AppState *state) {
@@ -111,6 +121,55 @@ static inline Clay_Dimensions SDL_MeasureText(Clay_StringSlice text,
   }
 
   return (Clay_Dimensions){(float)width, (float)height};
+}
+
+// Modal content rendering functions
+static void handle_close_modal(Clay_ElementId elementId,
+                           Clay_PointerData pointerData, intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    app_state->modal.visible = false;
+  }
+}
+
+static void handle_install_cep_extension(Clay_ElementId elementId,
+                                     Clay_PointerData pointerData,
+                                     intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    install_cep_extension();
+    app_state->modal.visible = false;
+  }
+}
+
+void render_help_modal_content(AppState *app_state) {
+    CLAY_TEXT(CLAY_STRING("Help"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+    CLAY_TEXT(CLAY_STRING("This is a placeholder for the help content."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+        Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
+        CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    }
+}
+
+void render_error_modal_content(AppState *app_state) {
+    CLAY_TEXT(CLAY_STRING("Connection Error"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+    CLAY_TEXT(CLAY_STRING("Could not connect to Premiere Pro. Please make sure it is running and the extension is installed."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+        Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
+        CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    }
+}
+
+static void handleHelp(Clay_ElementId elementId, Clay_PointerData pointerData,
+                        intptr_t userData) {
+  (void)elementId;
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    AppState *app_state = (AppState *)userData;
+    app_state->modal.visible = true;
+    app_state->modal.render_content = render_help_modal_content;
+  }
 }
 
 static void
@@ -199,7 +258,10 @@ static void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
 
       switch (app_state->connected_app) {
       case APP_PREMIERE:
-        premiere_pro_add_markers(beats_in_seconds, markers_in_selection_count);
+        if (premiere_pro_add_markers(beats_in_seconds, markers_in_selection_count) != 0) {
+          app_state->modal.visible = true;
+          app_state->modal.render_content = render_error_modal_content;
+        }
         break;
       case APP_AE:
         after_effects_add_markers(beats_in_seconds, markers_in_selection_count);
@@ -222,7 +284,10 @@ static void removeMarkers(Clay_ElementId elementId,
     AppState *app_state = (AppState *)userData;
     switch (app_state->connected_app) {
     case APP_PREMIERE:
-      premiere_pro_clear_all_markers();
+      if (premiere_pro_clear_all_markers() != 0) {
+        app_state->modal.visible = true;
+        app_state->modal.render_content = render_error_modal_content;
+      }
       break;
     case APP_AE:
       after_effects_clear_all_markers();
@@ -635,6 +700,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->tooltip_text = "";
   state->tooltip_target_id = (Clay_ElementId){0};
 
+  state->modal.visible = false;
+  state->modal.render_content = NULL;
+
   state->connected_app = APP_NONE;
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
 
@@ -787,6 +855,30 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    .padding = CLAY_PADDING_ALL(16),
                    .childGap = 16}}) {
 
+    // Modal
+    if (state->modal.visible) {
+      // Overlay
+      CLAY_AUTO_ID({
+        .backgroundColor = {0, 0, 0, 150},
+        .layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}},
+        .floating = {.attachTo = CLAY_ATTACH_TO_PARENT, .attachPoints = {.parent = CLAY_ATTACH_POINT_CENTER_CENTER, .element = CLAY_ATTACH_POINT_CENTER_CENTER}}
+      }) {
+        Clay_OnHover(handle_close_modal, (intptr_t)state);
+      }
+
+      // Modal container
+      CLAY_AUTO_ID({
+        .backgroundColor = COLOR_BG_LIGHT,
+        .layout = {.padding = CLAY_PADDING_ALL(16), .childGap = 16, .layoutDirection = CLAY_TOP_TO_BOTTOM, .sizing = {.width = CLAY_SIZING_FIXED(400)}},
+        .cornerRadius = CLAY_CORNER_RADIUS(8),
+        .floating = {.attachTo = CLAY_ATTACH_TO_PARENT, .attachPoints = {.parent = CLAY_ATTACH_POINT_CENTER_CENTER, .element = CLAY_ATTACH_POINT_CENTER_CENTER}}
+      }) {
+        if (state->modal.render_content) {
+          state->modal.render_content(state);
+        }
+      }
+    }
+
     // Context menu
     if (state->context_menu.visible) {
       CLAY_AUTO_ID({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
@@ -841,7 +933,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    (intptr_t)state);
 
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
-                   "Help", NULL, (intptr_t)state);
+                   "Help", handleHelp, (intptr_t)state);
 
       // empty container to push status text to the right
       CLAY_AUTO_ID({.layout.sizing = {.width = CLAY_SIZING_GROW(1)}});
