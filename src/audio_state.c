@@ -121,7 +121,7 @@ static void process_audio_file(AudioState *state) {
 
   // Initial file setup
   state->sample =
-      Sound_NewSampleFromFile(state->file_path, &desired, 16384);
+      Sound_NewSampleFromFile(state->file_path, &desired, 1048576);
   if (!state->sample) {
     printf("Error: Could not open audio file: %s\n", state->file_path);
     return;
