@@ -78,7 +78,7 @@ if(MACOS_BUNDLE)
 
     install(CODE "
       include(BundleUtilities)
-      set(bundle \"${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.app\")
+      set(bundle \"$<INSTALL_PREFIX>/${PROJECT_NAME}.app\")
       set(search_dirs
         \"/opt/homebrew/lib\"
         \"/usr/local/lib\"
