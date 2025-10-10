@@ -85,6 +85,14 @@ if(MACOS_BUNDLE)
         \"/opt/homebrew/lib\"
         \"/usr/local/lib\"
       )
+      file(GLOB GCC_LIB_DIR \"/opt/homebrew/lib/gcc/*\")
+      if(GCC_LIB_DIR)
+        list(APPEND search_dirs \${GCC_LIB_DIR})
+      endif()
+      file(GLOB GCC_LIB_DIR_LOCAL \"/usr/local/lib/gcc/*\")
+      if(GCC_LIB_DIR_LOCAL)
+        list(APPEND search_dirs \${GCC_LIB_DIR_LOCAL})
+      endif()
       fixup_bundle(
         \"\${bundle}\" \"\" \"\${search_dirs}\"
         IGNORE_ITEM
