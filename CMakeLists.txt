@@ -75,11 +75,13 @@ if(MACOS_BUNDLE)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    install(TARGETS SDL3_sound CARA LIBRARY DESTINATION lib)
 
     install(CODE "
       include(BundleUtilities)
       set(bundle \"$<INSTALL_PREFIX>/${PROJECT_NAME}.app\")
       set(search_dirs
+        \"$<INSTALL_PREFIX>/lib\"
         \"/opt/homebrew/lib\"
         \"/usr/local/lib\"
       )
