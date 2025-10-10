@@ -43,36 +43,17 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Install dylibbundler
-      run: brew install dylibbundler
+    - name: Install (runs fixup_bundle)
+      run: cmake --install build --prefix "$PWD/install"
 
     - name: Package
-      run: |
-        set -e
-        # Create the new directory structure
-        mkdir -p release/package/bin
-        mkdir -p release/package/lib
-        
-        # Copy files to their new locations
-        cp build/Release/bin/automarker-c release/package/bin/
-        cp -R build/Release/resources release/package/
-        # Pre-copy the SDL_sound library to where the executable is,
-        # so dylibbundler can find it before moving it.
-        cp build/Release/lib/libSDL3_sound.3.dylib release/package/bin/
-
-        # --- Bundle Dependencies ---
-        dylibbundler -od -b -x ./release/package/bin/automarker-c -d ./release/package/lib/
-
-        # --- Create Zip Archive ---
-        echo "Packaging complete."
-        cd release
-        zip -r automarker-c-macos-${{ matrix.arch }}.zip package
+      run: (cd build && cpack)
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: automarker-c-macos-${{ matrix.arch }}
-        path: release/automarker-c-macos-${{ matrix.arch }}.zip
+        path: build/*.dmg
 
   build-windows:
     runs-on: windows-latest

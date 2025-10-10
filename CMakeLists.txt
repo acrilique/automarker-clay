@@ -42,34 +42,75 @@ if(EXISTS "/usr/include/openblas")
     include_directories("/usr/include/openblas")
 endif()
 
-add_executable(${PROJECT_NAME}
-    src/main.c
-    src/audio_state.c
-    src/connections/process_utils.c
-    src/connections/premiere_pro.c
-    src/connections/after_effects.c
-    src/connections/resolve.c
-    libs/tinyfiledialogs/tinyfiledialogs.c)
+if(MACOS_BUNDLE)
+    add_executable(${PROJECT_NAME} MACOSX_BUNDLE
+        src/main.c
+        src/audio_state.c
+        src/connections/process_utils.c
+        src/connections/premiere_pro.c
+        src/connections/after_effects.c
+        src/connections/resolve.c
+        libs/tinyfiledialogs/tinyfiledialogs.c)
+else()
+    add_executable(${PROJECT_NAME}
+        src/main.c
+        src/audio_state.c
+        src/connections/process_utils.c
+        src/connections/premiere_pro.c
+        src/connections/after_effects.c
+        src/connections/resolve.c
+        libs/tinyfiledialogs/tinyfiledialogs.c)
+endif()
 
 if(MACOS_BUNDLE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE MACOS_BUNDLE)
-endif()
 
-# Set rpath for the executable to find the shared libraries at runtime
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    if(MACOS_BUNDLE)
-        set(RPATH_VALUE "@executable_path/../lib")
-    else()
-        set(RPATH_VALUE "@executable_path")
-    endif()
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE TRUE
+        INSTALL_RPATH "@executable_path/../Frameworks;@loader_path/../Frameworks"
+    )
+
+    set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks;@loader_path/../Frameworks")
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+
+    install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+
+    install(CODE "
+      include(BundleUtilities)
+      set(bundle \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.app\")
+      set(search_dirs
+        \"/opt/homebrew/lib\"
+        \"/usr/local/lib\"
+      )
+      fixup_bundle(
+        \"\${bundle}\" \"\" \"\${search_dirs}\"
+        IGNORE_ITEM
+          \"/System/Library/.*\"
+          \"/usr/lib/.*\"
+          \".*libSystem.*\"
+          \".*libobjc.*\"
+          \".*AppKit.framework/.*\"
+          \".*Foundation.framework/.*\"
+      )
+      execute_process(COMMAND codesign --force --deep --sign - \"\${bundle}\")
+    ")
+
+    include(CPack)
+    set(CPACK_GENERATOR DragNDrop)
 else()
-    set(RPATH_VALUE "$ORIGIN")
-endif()
+    # Set rpath for the executable to find the shared libraries at runtime
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        set(RPATH_VALUE "@executable_path")
+    else()
+        set(RPATH_VALUE "$ORIGIN")
+    endif()
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH "${RPATH_VALUE}"
-)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${RPATH_VALUE}"
+    )
+endif()
 
 if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
     target_link_libraries(${PROJECT_NAME} PRIVATE
