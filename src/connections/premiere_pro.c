@@ -10,18 +10,24 @@
 #endif
 
 void install_cep_extension(void) {
+    char command[2048];
+
+#ifdef _WIN32
+    char exe_path[MAX_PATH];
+    GetModuleFileName(NULL, exe_path, MAX_PATH);
+    char *last_slash = strrchr(exe_path, '\\');
+    if (last_slash) {
+        *last_slash = '\0';
+    }
+    snprintf(command, sizeof(command), "cmd.exe /c \"%s\\resources\\installers\\extension_installer_win.bat\"", exe_path);
+#else
     char *base_path = SDL_GetBasePath();
     if (!base_path) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get base path: %s", SDL_GetError());
         return;
     }
-
-    char command[2048];
-
-#ifdef _WIN32
-    snprintf(command, sizeof(command), "cmd.exe /c \"%sresources\\installers\\extension_installer_win.bat\"", base_path);
-#else
-    snprintf(command, sizeof(command), "sh \"%sresources/installers/extension_installer_mac.sh\"", base_path);
+    snprintf(command, sizeof(command), "sh \"%s/resources/installers/extension_installer_mac.sh\"", base_path);
+    SDL_free(base_path);
 #endif
 
     printf("Running command: %s\n", command);
@@ -32,8 +38,6 @@ void install_cep_extension(void) {
     } else {
         printf("Extension installation script finished.\n");
     }
-
-    SDL_free(base_path);
 }
 
 
