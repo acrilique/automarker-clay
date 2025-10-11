@@ -71,6 +71,7 @@ typedef struct {
 
 struct app_state {
   SDL_Window *window;
+  char *base_path;
   ConnectedApp connected_app;
   SDL_Thread *app_status_thread;
   SDL_Surface *file_icon;
@@ -145,7 +146,7 @@ static void handle_install_cep_extension(Clay_ElementId elementId,
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
-    install_cep_extension();
+    install_cep_extension(app_state->base_path);
     app_state->modal.visible = false;
   }
 }
@@ -574,8 +575,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 
-  char *base_path = SDL_GetBasePath();
-  if (!base_path) {
+  state->base_path = SDL_GetBasePath();
+  if (!state->base_path) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get base path: %s", SDL_GetError());
     return SDL_APP_FAILURE;
   }
@@ -584,9 +585,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   // Load Fonts
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "Roboto-Regular.ttf");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "Roboto-Regular.ttf");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/Roboto-Regular.ttf");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/Roboto-Regular.ttf");
 #endif
   TTF_Font *font_regular = TTF_OpenFont(resource_path, 22);
   if (!font_regular) {
@@ -617,9 +618,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   // Load Icons
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "file.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "file.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/file.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/file.svg");
 #endif
   state->file_icon = IMG_Load(resource_path);
   if (!state->file_icon) {
@@ -628,9 +629,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "play_pause.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "play_pause.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/play_pause.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/play_pause.svg");
 #endif
   state->play_icon = IMG_Load(resource_path);
   if (!state->play_icon) {
@@ -639,9 +640,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "send.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "send.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/send.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/send.svg");
 #endif
   state->send_icon = IMG_Load(resource_path);
   if (!state->send_icon) {
@@ -650,9 +651,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "remove.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "remove.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/remove.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/remove.svg");
 #endif
   state->remove_icon = IMG_Load(resource_path);
   if (!state->remove_icon) {
@@ -661,9 +662,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "help.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "help.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/help.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/help.svg");
 #endif
   state->help_icon = IMG_Load(resource_path);
   if (!state->help_icon) {
@@ -672,9 +673,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "mark_in.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "mark_in.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_in.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/mark_in.svg");
 #endif
   state->mark_in_icon = IMG_Load(resource_path);
   if (!state->mark_in_icon) {
@@ -683,9 +684,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "mark_out.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "mark_out.svg");
 #else
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_out.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/mark_out.svg");
 #endif
   state->mark_out_icon = IMG_Load(resource_path);
   if (!state->mark_out_icon) {
@@ -693,8 +694,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
-
-  SDL_free(base_path);
 
   state->audio_state = audio_state_create();
   if (!state->audio_state) {
@@ -1144,6 +1143,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
   AppState *state = appstate;
 
   if (state) {
+    SDL_free(state->base_path);
     SDL_DetachThread(state->app_status_thread);
     audio_state_destroy(state->audio_state);
 

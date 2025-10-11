@@ -14,33 +14,20 @@ typedef struct {
 #include <windows.h>
 #endif
 
-void install_cep_extension(void) {
+void install_cep_extension(const char *base_path) {
     char command[2048];
+    char installer_path[1024];
 
 #ifdef _WIN32
-    char exe_path[MAX_PATH];
-    GetModuleFileName(NULL, exe_path, MAX_PATH);
-    char *last_slash = strrchr(exe_path, '\\');
-    if (last_slash) {
-        *last_slash = '\0';
-    }
-    snprintf(command, sizeof(command), "cmd.exe /c \"%s\\resources\\installers\\extension_installer_win.bat\"", exe_path);
+    snprintf(installer_path, sizeof(installer_path), "%sresources\\installers\\extension_installer_win.bat", base_path);
+    snprintf(command, sizeof(command), "cmd.exe /c \"%s\"", installer_path);
 #else
-    char *base_path = SDL_GetBasePath();
-    if (!base_path) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get base path: %s", SDL_GetError());
-        return;
-    }
-
-    char installer_path[1024];
 #ifdef MACOS_BUNDLE
     snprintf(installer_path, sizeof(installer_path), "%s%s", base_path, "extension_installer_mac.sh");
 #else
     snprintf(installer_path, sizeof(installer_path), "%sresources/installers/extension_installer_mac.sh", base_path);
 #endif
-    
     snprintf(command, sizeof(command), "sh \"%s\"", installer_path);
-    SDL_free(base_path);
 #endif
 
     printf("Running command: %s\n", command);
