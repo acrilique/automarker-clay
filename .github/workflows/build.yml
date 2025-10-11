@@ -172,3 +172,30 @@ jobs:
         name: automarker-c-linux-x64-${{ steps.vars.outputs.sha_short }}
         path: release/automarker-c-linux-x64.zip
         compression-level: 0
+
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: [build-macos, build-windows, build-linux]
+    permissions:
+      contents: write
+    steps:
+      - name: Get short commit hash
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded artifacts
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "artifacts/*/*"
+          tag: release-${{ steps.vars.outputs.sha_short }}
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
