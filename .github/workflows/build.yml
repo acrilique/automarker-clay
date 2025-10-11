@@ -180,6 +180,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Get short commit hash
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -196,6 +198,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "artifacts/*/*"
-          tag: release-${{ steps.vars.outputs.sha_short }}
+          tag: v${{ steps.vars.outputs.sha_short }}
+          commit: ${{ github.sha }}
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
