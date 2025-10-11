@@ -79,13 +79,13 @@ if(MACOS_BUNDLE)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
-    install(TARGETS SDL3_sound LIBRARY DESTINATION lib)
+    install(TARGETS SDL3_sound LIBRARY DESTINATION lib_temp)
 
     install(CODE "
       include(BundleUtilities)
       set(bundle \"$<INSTALL_PREFIX>/${PROJECT_NAME}.app\")
       set(search_dirs
-        \"$<INSTALL_PREFIX>/lib\"
+        \"$<INSTALL_PREFIX>/lib_temp\"
         \"/opt/homebrew/lib\"
         \"/usr/local/lib\"
       )
@@ -107,6 +107,7 @@ if(MACOS_BUNDLE)
           \".*AppKit.framework/.*\"
           \".*Foundation.framework/.*\"
       )
+      file(REMOVE_RECURSE \"$<INSTALL_PREFIX>/lib_temp\")
     ")
 
     set(CPACK_GENERATOR "DragNDrop")
