@@ -550,7 +550,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   }
   *appstate = state;
 
-  if (!SDL_CreateWindowAndRenderer("automarker", 800, 480, 0, &state->window,
+  if (!SDL_CreateWindowAndRenderer("automarker", 1000, 480, 0, &state->window,
                                    &state->rendererData.renderer)) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR,
                  "Failed to create window and renderer: %s", SDL_GetError());
