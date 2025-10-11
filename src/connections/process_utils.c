@@ -13,6 +13,10 @@
 #else
     #include <dirent.h>
     #include <unistd.h>
+    #ifdef __APPLE__
+        #include <libproc.h>
+        #include <sys/proc_info.h>
+    #endif
 #endif
 
 #ifdef _WIN32
@@ -78,40 +82,65 @@ bool is_process_running(const char *process_name) {
     CloseHandle(snapshot);
     return false;
 #else
-    DIR *dir = opendir("/proc");
-    if (dir == NULL) {
-        return false;
-    }
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        // If the entry is not a directory, or not a number, skip it
-        if (!atoi(entry->d_name)) {
-            continue;
+    #ifdef __APPLE__
+        pid_t pids[2048];
+        int count = proc_listpids(PROC_ALL_PIDS, 0, pids, sizeof(pids));
+        if (count <= 0) {
+            return false;
         }
 
-        char path[512];
-        snprintf(path, sizeof(path), "/proc/%s/comm", entry->d_name);
-
-        FILE *fp = fopen(path, "r");
-        if (fp == NULL) {
-            continue;
-        }
-
-        char comm[256];
-        if (fgets(comm, sizeof(comm), fp) != NULL) {
-            // Remove newline character
-            comm[strcspn(comm, "\n")] = 0;
-            if (strcmp(comm, process_name) == 0) {
-                fclose(fp);
-                closedir(dir);
-                return true;
+        for (int i = 0; i < count; i++) {
+            if (pids[i] == 0) {
+                continue;
+            }
+            char path[PROC_PIDPATHINFO_MAXSIZE];
+            if (proc_pidpath(pids[i], path, sizeof(path)) > 0) {
+                char *name = strrchr(path, '/');
+                if (name != NULL) {
+                    name++; // Move past the '/'
+                    if (strcmp(name, process_name) == 0) {
+                        return true;
+                    }
+                }
             }
         }
-        fclose(fp);
-    }
+        return false;
+    #else // Assuming Linux
+        DIR *dir = opendir("/proc");
+        if (dir == NULL) {
+            return false;
+        }
 
-    closedir(dir);
-    return false;
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL) {
+            // If the entry is not a directory, or not a number, skip it
+            if (!atoi(entry->d_name)) {
+                continue;
+            }
+
+            char path[512];
+            snprintf(path, sizeof(path), "/proc/%s/comm", entry->d_name);
+
+            FILE *fp = fopen(path, "r");
+            if (fp == NULL) {
+                continue;
+            }
+
+            char comm[256];
+            if (fgets(comm, sizeof(comm), fp) != NULL) {
+                // Remove newline character
+                comm[strcspn(comm, "\n")] = 0;
+                if (strcmp(comm, process_name) == 0) {
+                    fclose(fp);
+                    closedir(dir);
+                    return true;
+                }
+            }
+            fclose(fp);
+        }
+
+        closedir(dir);
+        return false;
+    #endif
 #endif
 }
