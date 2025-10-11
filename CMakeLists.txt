@@ -109,7 +109,7 @@ if(MACOS_BUNDLE)
       )
     ")
 
-    set(CPACK_GENERATOR "DRAGNDROP")
+    set(CPACK_GENERATOR "DragNDrop")
     include(CPack)
 else()
     # Set rpath for the executable to find the shared libraries at runtime
