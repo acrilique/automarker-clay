@@ -8,11 +8,11 @@ option(MACOS_BUNDLE "Create a macOS bundle structure" OFF)
 
 # debug flags
 if(NOT MSVC)
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -g")
-endif()
-# if not on macos, add -pg for profiling
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -pg")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -g")
+    # if not on macos, add -pg for profiling
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -pg")
+    endif()
 endif()
 
 # release flags
