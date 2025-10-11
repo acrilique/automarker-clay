@@ -1,4 +1,5 @@
 #include "process_utils.h"
+#include "process_names.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -142,5 +143,41 @@ bool is_process_running(const char *process_name) {
         closedir(dir);
         return false;
     #endif
+#endif
+}
+
+bool is_process_running_from_list(const char * const *process_names, int num_names) {
+#ifdef __APPLE__
+    pid_t pids[2048];
+    int count = proc_listpids(PROC_ALL_PIDS, 0, pids, sizeof(pids));
+    if (count <= 0) {
+        return false;
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (pids[i] == 0) {
+            continue;
+        }
+        char path[PROC_PIDPATHINFO_MAXSIZE];
+        if (proc_pidpath(pids[i], path, sizeof(path)) > 0) {
+            char *name = strrchr(path, '/');
+            if (name != NULL) {
+                name++; // Move past the '/'
+                for (int j = 0; j < num_names; j++) {
+                    if (strcmp(name, process_names[j]) == 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+#else
+    for (int i = 0; i < num_names; i++) {
+        if (is_process_running(process_names[i])) {
+            return true;
+        }
+    }
+    return false;
 #endif
 }

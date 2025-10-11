@@ -15,6 +15,7 @@
 #include "./clay_renderer_SDL3.c"
 #include "audio_state.h"
 #include "connections/process_utils.h"
+#include "connections/process_names.h"
 #include "connections/premiere_pro.h"
 #include "connections/after_effects.h"
 #include "connections/resolve.h"
@@ -501,6 +502,17 @@ void HandleClayErrors(Clay_ErrorData errorData) {
 int check_app_status(void *data) {
     AppState *app_state = (AppState *)data;
     while (true) {
+#ifdef __APPLE__
+        if (is_process_running_from_list(PREMIERE_PROCESS_NAMES, NUM_PREMIERE_PROCESS_NAMES)) {
+            app_state->connected_app = APP_PREMIERE;
+        } else if (is_process_running_from_list(AFTERFX_PROCESS_NAMES, NUM_AFTERFX_PROCESS_NAMES)) {
+            app_state->connected_app = APP_AE;
+        } else if (is_process_running_from_list(RESOLVE_PROCESS_NAMES, NUM_RESOLVE_PROCESS_NAMES)) {
+            app_state->connected_app = APP_RESOLVE;
+        } else {
+            app_state->connected_app = APP_NONE;
+        }
+#else
         if (is_process_running(PREMIERE_PROCESS_NAME)) {
             app_state->connected_app = APP_PREMIERE;
         } else if (is_process_running(AFTERFX_PROCESS_NAME)) {
@@ -510,6 +522,7 @@ int check_app_status(void *data) {
         } else {
             app_state->connected_app = APP_NONE;
         }
+#endif
         SDL_Delay(1000); // Check every second
     }
     return 0;
