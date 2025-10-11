@@ -43,9 +43,6 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Install (runs fixup_bundle)
-      run: cmake --install build --prefix "$PWD/install"
-
     - name: Package
       run: (cd build && cpack)
 
