@@ -166,7 +166,7 @@ else()
 endif()
 
 if(MACOS_BUNDLE)
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/resources/ DESTINATION . BUNDLE DESTINATION "Resources")
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/resources/ DESTINATION ${PROJECT_NAME}.app/Contents/Resources)
 else()
     add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD
