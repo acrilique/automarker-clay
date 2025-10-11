@@ -79,6 +79,7 @@ if(MACOS_BUNDLE)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
+    install(TARGETS SDL3_sound LIBRARY DESTINATION lib)
 
     install(CODE "
       include(BundleUtilities)
