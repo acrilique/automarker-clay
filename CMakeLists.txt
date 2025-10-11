@@ -79,7 +79,6 @@ if(MACOS_BUNDLE)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
-    install(TARGETS SDL3_sound CARA LIBRARY DESTINATION lib)
 
     install(CODE "
       include(BundleUtilities)
@@ -166,9 +165,13 @@ else()
     )
 endif()
 
-add_custom_command(
-	TARGET ${PROJECT_NAME} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_directory
-		${CMAKE_CURRENT_SOURCE_DIR}/resources
-		${CMAKE_BINARY_DIR}/$<CONFIGURATION>/resources
-)
+if(MACOS_BUNDLE)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/resources/ DESTINATION . BUNDLE DESTINATION "Resources")
+else()
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/resources
+            ${CMAKE_BINARY_DIR}/$<CONFIGURATION>/resources
+    )
+endif()

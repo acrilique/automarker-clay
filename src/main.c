@@ -564,7 +564,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   // Load Fonts
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/Roboto-Regular.ttf");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "Roboto-Regular.ttf");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/Roboto-Regular.ttf");
 #endif
@@ -597,7 +597,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   // Load Icons
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/file.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "file.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/file.svg");
 #endif
@@ -608,7 +608,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/play_pause.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "play_pause.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/play_pause.svg");
 #endif
@@ -619,7 +619,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/send.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "send.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/send.svg");
 #endif
@@ -630,7 +630,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/remove.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "remove.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/remove.svg");
 #endif
@@ -641,7 +641,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/help.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "help.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/help.svg");
 #endif
@@ -652,7 +652,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/mark_in.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "mark_in.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_in.svg");
 #endif
@@ -663,7 +663,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 #ifdef MACOS_BUNDLE
-  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "../resources/mark_out.svg");
+  snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "mark_out.svg");
 #else
   snprintf(resource_path, sizeof(resource_path), "%s%s", base_path, "resources/mark_out.svg");
 #endif
