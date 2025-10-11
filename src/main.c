@@ -476,18 +476,41 @@ static void handleFileSelection(Clay_ElementId elementId,
     // Stop any ongoing playback first
     audio_state_stop_playback(audio_state);
 
-    // Always allow opening the file dialog
-    const char *filterPatterns[] = {
-        "*.wav",
-        "*.mp3"}; // This should depend on the result of Sound_AvailableDecoders
-    const char * selectedFile =
-        tinyfd_openFileDialog("Select Audio File", // title
-                              "",                  // default path
-                              2,                   // number of filter patterns
-                              filterPatterns,      // filter patterns array
-                              "Audio Files",       // filter description
-                              0                    // allow multiple selections
-        );
+    // Dynamically get the list of supported file formats
+    const Sound_DecoderInfo **decoder_info = Sound_AvailableDecoders();
+    int num_patterns = 0;
+    for (const Sound_DecoderInfo **info = decoder_info; *info != NULL; info++) {
+        for (const char **ext = (*info)->extensions; *ext != NULL; ext++) {
+            num_patterns++;
+        }
+    }
+
+    char **filterPatterns = SDL_malloc(sizeof(char *) * (num_patterns + 1));
+    char **current_pattern = filterPatterns;
+    for (const Sound_DecoderInfo **info = decoder_info; *info != NULL; info++) {
+        for (const char **ext = (*info)->extensions; *ext != NULL; ext++) {
+            // Allocate memory for the pattern string, e.g., "*.wav"
+            *current_pattern = SDL_malloc(strlen(*ext) + 3);
+            snprintf(*current_pattern, strlen(*ext) + 3, "*.%s", *ext);
+            current_pattern++;
+        }
+    }
+    *current_pattern = NULL; // Null-terminate the list
+
+    const char *selectedFile = tinyfd_openFileDialog(
+        "Select Audio File", // title
+        "",                  // default path
+        num_patterns,        // number of filter patterns
+        (const char *const *)filterPatterns, // filter patterns array
+        "Audio Files",       // filter description
+        0                    // allow multiple selections
+    );
+
+    // Free the allocated memory for the filter patterns
+    for (int i = 0; i < num_patterns; i++) {
+        SDL_free(filterPatterns[i]);
+    }
+    SDL_free(filterPatterns);
 
     // If no file was selected (dialog was cancelled), do nothing
     if (!selectedFile) {
