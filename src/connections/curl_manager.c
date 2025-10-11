@@ -49,6 +49,14 @@ void curl_manager_update(CurlManager *manager) {
         m = curl_multi_info_read(manager->multi_handle, &msgq);
         if (m && (m->msg == CURLMSG_DONE)) {
             CURL *e = m->easy_handle;
+            CURLcode res = m->data.result;
+
+            if (res != CURLE_OK) {
+                fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+                long response_code;
+                curl_easy_getinfo(e, CURLINFO_RESPONSE_CODE, &response_code);
+                fprintf(stderr, "HTTP response code: %ld\n", response_code);
+            }
             
             JsxRequestData *request_data;
             curl_easy_getinfo(e, CURLINFO_PRIVATE, &request_data);
