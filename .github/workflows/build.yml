@@ -46,15 +46,14 @@ jobs:
     - name: Package
       run: (cd build && cpack)
 
-    - name: Get short commit hash
-      id: vars
-      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+    - name: Rename package
+      run: mv build/*.dmg build/automarker-c-macos-${{ matrix.arch }}.dmg
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: automarker-c-macos-${{ matrix.arch }}-${{ steps.vars.outputs.sha_short }}
-        path: build/*.dmg
+        name: automarker-c-macos-${{ matrix.arch }}
+        path: build/automarker-c-macos-${{ matrix.arch }}.dmg
         compression-level: 0
 
   build-windows:
@@ -77,14 +76,11 @@ jobs:
       run: |
         mkdir release
         7z a release/automarker-c-windows-x64.zip ./build/Release/*
-    - name: Get short commit hash
-      id: vars
-      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: automarker-c-windows-x64-${{ steps.vars.outputs.sha_short }}
+        name: automarker-c-windows-x64
         path: release/automarker-c-windows-x64.zip
         compression-level: 0
 
@@ -162,14 +158,10 @@ jobs:
         cd release
         zip -r automarker-c-linux-x64.zip package
 
-    - name: Get short commit hash
-      id: vars
-      run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: automarker-c-linux-x64-${{ steps.vars.outputs.sha_short }}
+        name: automarker-c-linux-x64
         path: release/automarker-c-linux-x64.zip
         compression-level: 0
 
@@ -194,10 +186,18 @@ jobs:
       - name: List downloaded artifacts
         run: ls -R artifacts
 
+      - name: Flatten artifacts
+        run: |
+          mkdir release-artifacts
+          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" \) -exec mv {} release-artifacts/ \;
+
+      - name: List flattened artifacts
+        run: ls -R release-artifacts
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "artifacts/*/*"
+          artifacts: "release-artifacts/*"
           tag: v${{ steps.vars.outputs.sha_short }}
           commit: ${{ github.sha }}
           generateReleaseNotes: true
