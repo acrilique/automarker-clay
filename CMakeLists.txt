@@ -107,11 +107,10 @@ if(MACOS_BUNDLE)
           \".*AppKit.framework/.*\"
           \".*Foundation.framework/.*\"
       )
-      execute_process(COMMAND codesign --force --deep --sign - \"\${bundle}\")
     ")
 
+    set(CPACK_GENERATOR "DRAGNDROP")
     include(CPack)
-    set(CPACK_GENERATOR DragNDrop)
 else()
     # Set rpath for the executable to find the shared libraries at runtime
     if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
