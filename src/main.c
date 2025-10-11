@@ -2,6 +2,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <curl/curl.h>
 
 #include <stdio.h>
 
@@ -17,6 +18,7 @@
 #include "connections/premiere_pro.h"
 #include "connections/after_effects.h"
 #include "connections/resolve.h"
+#include "connections/curl_manager.h"
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
@@ -101,6 +103,7 @@ struct app_state {
   ModalState modal;
 
   WaveformData waveformData;
+  CurlManager *curl_manager;
 };
 
 
@@ -260,7 +263,7 @@ static void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
 
       switch (app_state->connected_app) {
       case APP_PREMIERE:
-        if (premiere_pro_add_markers(beats_in_seconds, markers_in_selection_count) != 0) {
+        if (premiere_pro_add_markers(app_state->curl_manager, beats_in_seconds, markers_in_selection_count) != 0) {
           app_state->modal.visible = true;
           app_state->modal.render_content = render_error_modal_content;
         }
@@ -286,7 +289,7 @@ static void removeMarkers(Clay_ElementId elementId,
     AppState *app_state = (AppState *)userData;
     switch (app_state->connected_app) {
     case APP_PREMIERE:
-      if (premiere_pro_clear_all_markers() != 0) {
+      if (premiere_pro_clear_all_markers(app_state->curl_manager) != 0) {
         app_state->modal.visible = true;
         app_state->modal.render_content = render_error_modal_content;
       }
@@ -524,6 +527,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 
+  curl_global_init(CURL_GLOBAL_ALL);
+
   AppState *state = SDL_calloc(1, sizeof(AppState));
   if (!state) {
     return SDL_APP_FAILURE;
@@ -708,6 +713,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->connected_app = APP_NONE;
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
 
+  state->curl_manager = curl_manager_create();
+
   *appstate = state;
   return SDL_APP_CONTINUE;
 }
@@ -843,6 +850,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 SDL_AppResult SDL_AppIterate(void *appstate) {
   AppState *state = appstate;
   state->is_tooltip_visible = false;
+
+  curl_manager_update(state->curl_manager);
 
   Clay_BeginLayout();
 
@@ -1125,6 +1134,8 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     SDL_DetachThread(state->app_status_thread);
     audio_state_destroy(state->audio_state);
 
+    curl_manager_destroy(state->curl_manager);
+
     // Clean up SDL resources
     if (state->rendererData.renderer)
       SDL_DestroyRenderer(state->rendererData.renderer);
@@ -1147,4 +1158,5 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
   Sound_Quit();
   TTF_Quit();
+  curl_global_cleanup();
 }

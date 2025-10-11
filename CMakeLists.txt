@@ -54,6 +54,7 @@ if(MACOS_BUNDLE)
         src/connections/premiere_pro.c
         src/connections/after_effects.c
         src/connections/resolve.c
+        src/connections/curl_manager.c
         libs/tinyfiledialogs/tinyfiledialogs.c)
 else()
     add_executable(${PROJECT_NAME}
@@ -63,6 +64,7 @@ else()
         src/connections/premiere_pro.c
         src/connections/after_effects.c
         src/connections/resolve.c
+        src/connections/curl_manager.c
         libs/tinyfiledialogs/tinyfiledialogs.c)
 endif()
 

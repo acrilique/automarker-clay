@@ -5,6 +5,11 @@
 #include <curl/curl.h>
 #include <SDL3/SDL.h>
 
+typedef struct {
+    char *data;
+    struct curl_slist *headers;
+} JsxRequestData;
+
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -41,40 +46,38 @@ void install_cep_extension(void) {
 }
 
 
-static int send_jsx(const char *jsx_payload) {
-    CURL *curl;
-    CURLcode res;
-    int success = 0;
-
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
-
-    if (curl) {
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-
-        char data[1024];
-        snprintf(data, sizeof(data), "{\"to_eval\": \"%s\"}", jsx_payload);
-
-        curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:3000");
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data);
-
-        res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-            success = -1;
-        }
-
-        curl_easy_cleanup(curl);
-        curl_slist_free_all(headers);
+static int send_jsx(CurlManager *curl_manager, const char *jsx_payload) {
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        return -1;
     }
 
-    curl_global_cleanup();
-    return success;
+    JsxRequestData *request_data = malloc(sizeof(JsxRequestData));
+    if (!request_data) {
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+
+    request_data->headers = curl_slist_append(NULL, "Content-Type: application/json");
+    request_data->data = malloc(4096);
+    if (!request_data->data) {
+        free(request_data);
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+    snprintf(request_data->data, 4096, "{\"to_eval\": \"%s\"}", jsx_payload);
+
+    curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:3000");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, request_data->headers);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_data->data);
+    curl_easy_setopt(curl, CURLOPT_PRIVATE, request_data);
+
+    curl_manager_add_handle(curl_manager, curl);
+
+    return 0;
 }
 
-int premiere_pro_add_markers(const double *beats, int num_beats) {
+int premiere_pro_add_markers(CurlManager *curl_manager, const double *beats, int num_beats) {
     char jsx_payload[4096] = "";
     char buffer[256];
 
@@ -94,10 +97,10 @@ int premiere_pro_add_markers(const double *beats, int num_beats) {
     strcat(jsx_payload, "}");
     strcat(jsx_payload, "}");
 
-    return send_jsx(jsx_payload);
+    return send_jsx(curl_manager, jsx_payload);
 }
 
-int premiere_pro_clear_all_markers(void) {
+int premiere_pro_clear_all_markers(CurlManager *curl_manager) {
     const char *jsx_payload =
         "var markers = app.project.activeSequence.markers;"
         "var current_marker = markers.getFirstMarker();"
@@ -107,5 +110,5 @@ int premiere_pro_clear_all_markers(void) {
         "markers.deleteMarker(to_delete);"
         "}";
 
-    return send_jsx(jsx_payload);
+    return send_jsx(curl_manager, jsx_payload);
 }
