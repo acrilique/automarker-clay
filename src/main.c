@@ -99,6 +99,8 @@ struct app_state {
 
   // Modal state
   ModalState modal;
+
+  WaveformData waveformData;
 };
 
 
@@ -1005,7 +1007,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                      .childGap = 16},
           .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
       // Create waveform data with current zoom and scroll values
-      WaveformData waveformData = {.samples = NULL,
+      state->waveformData = (WaveformData){.samples = NULL,
                                    .sampleCount = 0,
                                    .beat_positions = NULL,
                                    .beat_count = 0,
@@ -1026,30 +1028,30 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
       if (state->audio_state->status >= STATUS_BEAT_ANALYSIS &&
           state->audio_state->sample->buffer &&
           state->audio_state->sample->buffer_size > 0) {
-        waveformData.samples = state->audio_state->sample->buffer;
-        waveformData.sampleCount =
+        state->waveformData.samples = state->audio_state->sample->buffer;
+        state->waveformData.sampleCount =
             state->audio_state->sample->buffer_size / sizeof(float);
 
         // Add beat positions if available
         if (state->audio_state->beat_positions &&
             state->audio_state->beat_count > 0) {
-          waveformData.beat_positions = state->audio_state->beat_positions;
-          waveformData.beat_count = state->audio_state->beat_count;
+          state->waveformData.beat_positions = state->audio_state->beat_positions;
+          state->waveformData.beat_count = state->audio_state->beat_count;
 
           // Debug info for beats
           static bool logged_beats = false;
           if (!logged_beats) {
             printf("Waveform display using %d beats\n",
-                   waveformData.beat_count);
+                   state->waveformData.beat_count);
             logged_beats = true;
           }
         }
 
         // Add playback cursor if the track is loaded
         if (state->audio_state->status == STATUS_COMPLETED) {
-          waveformData.showPlaybackCursor = true;
-          waveformData.selection_start = state->audio_state->selection_start;
-          waveformData.selection_end = state->audio_state->selection_end;
+          state->waveformData.showPlaybackCursor = true;
+          state->waveformData.selection_start = state->audio_state->selection_start;
+          state->waveformData.selection_end = state->audio_state->selection_end;
 
           unsigned int raw_pos =
               audio_state_get_playback_position(state->audio_state);
@@ -1067,14 +1069,14 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
             corrected_pos = 0;
           }
 
-          waveformData.playbackPosition = (unsigned int)corrected_pos;
+          state->waveformData.playbackPosition = (unsigned int)corrected_pos;
         }
 
         // Debug info
         static bool logged_waveform = false;
         if (!logged_waveform) {
           printf("Waveform display using %d samples\n",
-                 waveformData.sampleCount);
+                 state->waveformData.sampleCount);
           logged_waveform = true;
         }
       }
@@ -1086,7 +1088,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
         .layout = {.sizing = {.width = CLAY_SIZING_GROW(0),
                               .height = CLAY_SIZING_GROW(0)}},
         .cornerRadius = CLAY_CORNER_RADIUS(8),
-        .custom = {.customData = &waveformData},
+        .custom = {.customData = &state->waveformData},
       }) {
         Clay_OnHover(handleWaveformInteraction, (intptr_t)state);
       }
