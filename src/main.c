@@ -258,7 +258,8 @@ static void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
         if (audio_state->beat_positions[i] >= audio_state->selection_start &&
             audio_state->beat_positions[i] <= audio_state->selection_end) {
           beats_in_seconds[current_marker] =
-              (double)(audio_state->beat_positions[i] - audio_state->selection_start) / audio_state->sample->actual.rate;
+              (double)(audio_state->beat_positions[i] - audio_state->selection_start) /
+                (audio_state->sample->actual.rate * audio_state->sample->actual.channels);
           current_marker++;
         }
       }
