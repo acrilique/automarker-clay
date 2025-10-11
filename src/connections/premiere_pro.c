@@ -31,7 +31,15 @@ void install_cep_extension(void) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get base path: %s", SDL_GetError());
         return;
     }
-    snprintf(command, sizeof(command), "sh \"%s/resources/installers/extension_installer_mac.sh\"", base_path);
+
+    char installer_path[1024];
+#ifdef MACOS_BUNDLE
+    snprintf(installer_path, sizeof(installer_path), "%s%s", base_path, "extension_installer_mac.sh");
+#else
+    snprintf(installer_path, sizeof(installer_path), "%sresources/installers/extension_installer_mac.sh", base_path);
+#endif
+    
+    snprintf(command, sizeof(command), "sh \"%s\"", installer_path);
     SDL_free(base_path);
 #endif
 
