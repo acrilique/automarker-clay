@@ -6,10 +6,6 @@ on:
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'A version number (e.g. 0.1.0)'
-        required: true
 
 jobs:
   build-macos:
@@ -196,11 +192,15 @@ jobs:
       - name: List flattened artifacts
         run: ls -R release-artifacts
 
+      - name: Extract version from CMakeLists.txt
+        id: version
+        run: echo "VERSION=$(grep -oP 'project\(automarker-c VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)" >> $GITHUB_ENV
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           artifacts: "release-artifacts/*"
-          tag: v${{ github.event.inputs.version }}
+          tag: v${{ env.VERSION }}
           commit: ${{ github.sha }}
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}

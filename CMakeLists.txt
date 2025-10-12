@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.27)
 
 # Project setup
+project(automarker-c VERSION 0.1.0)
+set(CMAKE_PROJECT_VERSION "${PROJECT_VERSION}")
 project(automarker-c C)
 set(CMAKE_C_STANDARD 99)
 
