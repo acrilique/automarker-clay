@@ -180,7 +180,7 @@ static void handle_toggle_check_for_updates(Clay_ElementId elementId, Clay_Point
     }
 }
 
-void render_help_modal_content(AppState *app_state) {
+static void render_help_modal_content(AppState *app_state) {
     CLAY_TEXT(CLAY_STRING("Help"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
     CLAY_TEXT(CLAY_STRING("This is a placeholder for the help content."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
 
@@ -253,7 +253,7 @@ void render_update_modal_content(AppState *app_state) {
     }
 }
 
-void render_error_modal_content(AppState *app_state) {
+static void render_error_modal_content(AppState *app_state) {
     CLAY_TEXT(CLAY_STRING("Connection Error"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
     CLAY_TEXT(CLAY_STRING("Could not connect to Premiere Pro. Please make sure it is running and the extension is installed."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
     CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
@@ -622,11 +622,11 @@ static void handleFileSelection(Clay_ElementId elementId,
   }
 }
 
-void HandleClayErrors(Clay_ErrorData errorData) {
+static void HandleClayErrors(Clay_ErrorData errorData) {
   printf("%s", errorData.errorText.chars);
 }
 
-int check_app_status(void *data) {
+static int check_app_status(void *data) {
     AppState *app_state = (AppState *)data;
     while (true) {
 #ifdef __APPLE__
