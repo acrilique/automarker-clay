@@ -866,7 +866,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->updater_state = updater_create("acrilique", "automarker-c");
 
   if (state->updater_state->check_on_startup) {
-      updater_check_for_updates(state->updater_state);
+      updater_check_for_updates(state->updater_state, state->curl_manager);
   }
 
   *appstate = state;

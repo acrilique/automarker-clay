@@ -26,7 +26,7 @@ typedef struct {
 UpdaterState* updater_create(const char* org, const char* app);
 void updater_destroy(UpdaterState* updater);
 
-void updater_check_for_updates(UpdaterState* updater);
+void updater_check_for_updates(UpdaterState* updater, CurlManager* curl_manager);
 void updater_start_download(UpdaterState* updater, CurlManager* curl_manager, const char* base_path);
 
 void updater_load_config(UpdaterState* updater);

@@ -26,9 +26,15 @@ typedef struct CurlManager {
     int still_running;
 } CurlManager;
 
+typedef enum {
+    REQUEST_TYPE_GET,
+    REQUEST_TYPE_DOWNLOAD,
+    REQUEST_TYPE_JSX,
+} RequestType;
+
 CurlManager* curl_manager_create();
 void curl_manager_destroy(CurlManager *manager);
-void curl_manager_add_handle(CurlManager *manager, CURL *easy_handle);
+void curl_manager_add_handle(CurlManager *manager, CURL *easy_handle, RequestType type, void* data);
 void curl_manager_update(CurlManager *manager);
 
 void curl_manager_perform_get(CurlManager *manager, const char *url, void (*callback)(const char*, bool, void*), void *userdata);

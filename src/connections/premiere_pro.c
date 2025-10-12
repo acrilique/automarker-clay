@@ -82,9 +82,8 @@ static int send_jsx(CurlManager *curl_manager, const char *jsx_payload) {
     curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:3000");
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, request_data->headers);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_data->data);
-    curl_easy_setopt(curl, CURLOPT_PRIVATE, request_data);
 
-    curl_manager_add_handle(curl_manager, curl);
+    curl_manager_add_handle(curl_manager, curl, REQUEST_TYPE_JSX, request_data);
 
     return 0;
 }

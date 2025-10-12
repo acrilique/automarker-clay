@@ -15,7 +15,6 @@
 
 typedef struct {
     UpdaterState *updater_state;
-    CurlManager *curl_manager;
 } UpdateCheckData;
 
 typedef struct {
@@ -108,7 +107,7 @@ cleanup:
     SDL_free(data);
 }
 
-void updater_check_for_updates(UpdaterState *updater) {
+void updater_check_for_updates(UpdaterState *updater, CurlManager* curl_manager) {
     if (updater->status == UPDATE_STATUS_CHECKING) {
         return;
     }
@@ -116,9 +115,8 @@ void updater_check_for_updates(UpdaterState *updater) {
 
     UpdateCheckData *data = SDL_malloc(sizeof(UpdateCheckData));
     data->updater_state = updater;
-    data->curl_manager = curl_manager_create(); // Create a temporary manager for this check
 
-    curl_manager_perform_get(data->curl_manager, GITHUB_API_URL, update_check_callback, data);
+    curl_manager_perform_get(curl_manager, GITHUB_API_URL, update_check_callback, data);
 }
 
 UpdaterState* updater_create(const char* org, const char* app) {
