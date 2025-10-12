@@ -37,6 +37,7 @@
 #include "connections/after_effects.h"
 #include "connections/resolve.h"
 #include "connections/curl_manager.h"
+#include "updater.h"
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
@@ -96,6 +97,7 @@ struct app_state {
   SDL_Surface *send_icon;
   SDL_Surface *remove_icon;
   SDL_Surface *help_icon;
+  SDL_Surface *update_icon;
   SDL_Surface *mark_in_icon;
   SDL_Surface *mark_out_icon;
 
@@ -123,6 +125,7 @@ struct app_state {
 
   WaveformData waveformData;
   CurlManager *curl_manager;
+  UpdaterState *updater_state;
 };
 
 
@@ -168,12 +171,81 @@ static void handle_install_cep_extension(Clay_ElementId elementId,
   }
 }
 
+static void handle_toggle_check_for_updates(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
+    (void)elementId;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        AppState *app_state = (AppState *)userData;
+        app_state->updater_state->check_on_startup = !app_state->updater_state->check_on_startup;
+        updater_save_config(app_state->updater_state);
+    }
+}
+
 void render_help_modal_content(AppState *app_state) {
     CLAY_TEXT(CLAY_STRING("Help"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
     CLAY_TEXT(CLAY_STRING("This is a placeholder for the help content."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+
+    // Auto-update checkbox
+    CLAY_AUTO_ID({.layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}, .childGap = 8, .padding = CLAY_PADDING_ALL(4)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+        Clay_OnHover(handle_toggle_check_for_updates, (intptr_t)app_state);
+        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(20), .height = CLAY_SIZING_FIXED(20)}}, .border = {.color = COLOR_WHITE, .width = CLAY_BORDER_ALL(1)}, .backgroundColor = app_state->updater_state->check_on_startup ? COLOR_ACCENT : COLOR_BG_LIGHT});
+        CLAY_TEXT(CLAY_STRING("Check for updates on startup"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    }
+
     CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
         Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
         CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    }
+}
+
+static void handle_update_now(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
+    (void)elementId;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        AppState *app_state = (AppState *)userData;
+        updater_start_download(app_state->updater_state, app_state->curl_manager, app_state->base_path);
+        app_state->modal.visible = false;
+    }
+}
+
+static void handle_skip_version(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
+    (void)elementId;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        AppState *app_state = (AppState *)userData;
+        strncpy(app_state->updater_state->last_ignored_version, app_state->updater_state->latest_version, sizeof(app_state->updater_state->last_ignored_version) - 1);
+        updater_save_config(app_state->updater_state);
+        app_state->updater_state->status = UPDATE_STATUS_IDLE;
+        app_state->modal.visible = false;
+    }
+}
+
+void render_update_modal_content(AppState *app_state) {
+    if (app_state->updater_state->status == UPDATE_STATUS_DOWNLOADING) {
+        CLAY_TEXT(CLAY_STRING("Downloading Update..."), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+        
+        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(20)}}, .backgroundColor = COLOR_BG_DARK, .cornerRadius = CLAY_CORNER_RADIUS(4)}) {
+            CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_PERCENT(app_state->updater_state->download_progress), .height = CLAY_SIZING_GROW(0)}}, .backgroundColor = COLOR_ACCENT, .cornerRadius = CLAY_CORNER_RADIUS(4)}) {
+            }
+        }
+    } else {
+        CLAY_TEXT(CLAY_STRING("Update Available"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+        char update_text[256];
+        snprintf(update_text, sizeof(update_text), "A new version (%s) is available. Do you want to update?", app_state->updater_state->latest_version);
+        Clay_String update_string = { .isStaticallyAllocated = false, .length = (int32_t)strlen(update_text), .chars = update_text };  
+        CLAY_TEXT(update_string, CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+
+        CLAY_AUTO_ID({.layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 8, .sizing = {.width = CLAY_SIZING_GROW(0)}}}) {
+            CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(1)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+                Clay_OnHover(handle_update_now, (intptr_t)app_state);
+                CLAY_TEXT(CLAY_STRING("Update Now"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+            }
+            CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(1)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+                Clay_OnHover(handle_skip_version, (intptr_t)app_state);
+                CLAY_TEXT(CLAY_STRING("Skip Version"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+            }
+            CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(1)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+                Clay_OnHover(handle_close_modal, (intptr_t)app_state);
+                CLAY_TEXT(CLAY_STRING("Cancel"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+            }
+        }
     }
 }
 
@@ -183,6 +255,15 @@ void render_error_modal_content(AppState *app_state) {
     CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
         Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
         CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    }
+}
+
+static void handle_update_button(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
+    (void)elementId;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        AppState *app_state = (AppState *)userData;
+        app_state->modal.visible = true;
+        app_state->modal.render_content = render_update_modal_content;
     }
 }
 
@@ -735,6 +816,17 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
                  SDL_GetError());
     return SDL_APP_FAILURE;
   }
+#ifdef MACOS_BUNDLE
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "update.svg");
+#else
+  snprintf(resource_path, sizeof(resource_path), "%s%s", state->base_path, "resources/update.svg");
+#endif
+  state->update_icon = IMG_Load(resource_path);
+  if (!state->update_icon) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to load update icon: %s",
+                 SDL_GetError());
+    return SDL_APP_FAILURE;
+  }
 
   state->audio_state = audio_state_create();
   if (!state->audio_state) {
@@ -767,6 +859,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
 
   state->curl_manager = curl_manager_create();
+  state->updater_state = updater_create("acrilique", "automarker-c");
+
+  if (state->updater_state->check_on_startup) {
+      updater_check_for_updates(state->updater_state);
+  }
 
   *appstate = state;
   return SDL_APP_CONTINUE;
@@ -999,6 +1096,13 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
                    "Help", handleHelp, (intptr_t)state);
 
+      if (state->updater_state->status == UPDATE_STATUS_AVAILABLE) {
+        char tooltip[128];
+        snprintf(tooltip, sizeof(tooltip), "Update to %s", state->updater_state->latest_version);
+        headerButton(CLAY_ID("UpdateButton"), CLAY_ID("UpdateIcon"), state->update_icon,
+                     tooltip, handle_update_button, (intptr_t)state);
+      }
+
       // empty container to push status text to the right
       CLAY_AUTO_ID({.layout.sizing = {.width = CLAY_SIZING_GROW(1)}});
 
@@ -1189,6 +1293,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     audio_state_destroy(state->audio_state);
 
     curl_manager_destroy(state->curl_manager);
+    updater_destroy(state->updater_state);
 
     // Clean up SDL resources
     if (state->rendererData.renderer)
