@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <cjson/cJSON.h>
 
 #ifndef APP_VERSION
 #define APP_VERSION "0.0.0"
@@ -26,101 +27,84 @@ static int parse_version(const char *version_str, int *major, int *minor, int *p
     return sscanf(version_str, "v%d.%d.%d", major, minor, patch);
 }
 
-// Helper to find a string value in a JSON response without a full parser.
-// This is fragile but avoids a new dependency.
-static bool find_json_string_value(const char *json, const char *key, char *buffer, size_t buffer_size) {
-    const char *key_ptr = strstr(json, key);
-    if (!key_ptr) return false;
-
-    const char *value_start = strchr(key_ptr, ':');
-    if (!value_start) return false;
-
-    value_start = strchr(value_start, '"');
-    if (!value_start) return false;
-    value_start++; // Move past the opening quote
-
-    const char *value_end = strchr(value_start, '"');
-    if (!value_end) return false;
-
-    size_t length = value_end - value_start;
-    if (length >= buffer_size) return false;
-
-    strncpy(buffer, value_start, length);
-    buffer[length] = '\0';
-    return true;
-}
-
 static void update_check_callback(const char *response, bool success, void *userdata) {
     UpdateCheckData *data = (UpdateCheckData *)userdata;
     UpdaterState *updater = data->updater_state;
+    cJSON *json = NULL;
 
     if (!success) {
         snprintf(updater->error_message, sizeof(updater->error_message), "Failed to fetch release info.");
         updater->status = UPDATE_STATUS_ERROR;
-        SDL_free(data);
-        return;
+        goto cleanup;
+    }
+
+    json = cJSON_Parse(response);
+    if (!json) {
+        snprintf(updater->error_message, sizeof(updater->error_message), "Failed to parse JSON response.");
+        updater->status = UPDATE_STATUS_ERROR;
+        goto cleanup;
+    }
+
+    const cJSON *tag_name_item = cJSON_GetObjectItem(json, "tag_name");
+    if (!cJSON_IsString(tag_name_item)) {
+        snprintf(updater->error_message, sizeof(updater->error_message), "No tag_name in release info.");
+        updater->status = UPDATE_STATUS_ERROR;
+        goto cleanup;
     }
 
     char remote_version_str[32];
-    if (!find_json_string_value(response, "\"tag_name\"", remote_version_str, sizeof(remote_version_str))) {
-        snprintf(updater->error_message, sizeof(updater->error_message), "No tag_name in release info.");
-        updater->status = UPDATE_STATUS_ERROR;
-        SDL_free(data);
-        return;
-    }
+    strncpy(remote_version_str, tag_name_item->valuestring, sizeof(remote_version_str) - 1);
+
     int remote_major, remote_minor, remote_patch;
     int current_major, current_minor, current_patch;
 
-    if (parse_version(remote_version_str, &remote_major, &remote_minor, &remote_patch) == 3 &&
-        parse_version(APP_VERSION, &current_major, &current_minor, &current_patch) == 3) {
+    if (parse_version(remote_version_str, &remote_major, &remote_minor, &remote_patch) != 3 ||
+        parse_version(APP_VERSION, &current_major, &current_minor, &current_patch) != 3) {
+        snprintf(updater->error_message, sizeof(updater->error_message), "Failed to parse version strings.");
+        updater->status = UPDATE_STATUS_ERROR;
+        goto cleanup;
+    }
 
-        if (strcmp(remote_version_str, updater->last_ignored_version) != 0 &&
-            (remote_major > current_major ||
-            (remote_major == current_major && remote_minor > current_minor) ||
-            (remote_major == current_major && remote_minor == current_minor && remote_patch > current_patch))) {
+    bool new_version_is_available = (remote_major > current_major) ||
+                                  (remote_major == current_major && remote_minor > current_minor) ||
+                                  (remote_major == current_major && remote_minor == current_minor && remote_patch > current_patch);
 
-            strncpy(updater->latest_version, remote_version_str, sizeof(updater->latest_version) - 1);
+    if (strcmp(remote_version_str, updater->last_ignored_version) != 0 && new_version_is_available) {
+        strncpy(updater->latest_version, remote_version_str, sizeof(updater->latest_version) - 1);
 
-            // Find the correct asset download URL
-            const char *assets_ptr = strstr(response, "\"assets\"");
-            if (assets_ptr) {
-                char asset_name[128];
-                char download_url[256];
-
-#if defined(__APPLE__)
-    #if defined(__aarch64__)
-                const char* platform_str = "macos-arm64.dmg";
-    #else
-                const char* platform_str = "macos-x86_64.dmg";
-    #endif
+        const cJSON *assets_array = cJSON_GetObjectItem(json, "assets");
+        if (cJSON_IsArray(assets_array)) {
+            const char* platform_str =
+#if defined(__APPLE__) && defined(__aarch64__)
+                "macos-arm64.dmg";
+#elif defined(__APPLE__)
+                "macos-x86_64.dmg";
 #elif defined(_WIN32)
-                const char* platform_str = "windows-x64.zip";
+                "windows-x64.zip";
 #else
-                const char* platform_str = NULL;
+                NULL;
 #endif
-                if (platform_str) {
-                    const char* current_asset = assets_ptr;
-                    while((current_asset = strstr(current_asset, "\"name\"")) != NULL) {
-                        if (find_json_string_value(current_asset, "\"name\"", asset_name, sizeof(asset_name)) &&
-                            strstr(asset_name, platform_str)) {
-                            if (find_json_string_value(current_asset, "\"browser_download_url\"", download_url, sizeof(download_url))) {
-                                strncpy(updater->download_url, download_url, sizeof(updater->download_url) - 1);
-                                updater->status = UPDATE_STATUS_AVAILABLE;
-                                break;
-                            }
-                        }
-                        current_asset++; // Move past the found "name" to avoid re-matching
+            if (platform_str) {
+                cJSON *asset;
+                cJSON_ArrayForEach(asset, assets_array) {
+                    const cJSON *name = cJSON_GetObjectItem(asset, "name");
+                    const cJSON *url = cJSON_GetObjectItem(asset, "browser_download_url");
+                    if (cJSON_IsString(name) && strstr(name->valuestring, platform_str) && cJSON_IsString(url)) {
+                        strncpy(updater->download_url, url->valuestring, sizeof(updater->download_url) - 1);
+                        updater->status = UPDATE_STATUS_AVAILABLE;
+                        break;
                     }
                 }
             }
-        } else {
-            updater->status = UPDATE_STATUS_IDLE;
         }
     } else {
-        snprintf(updater->error_message, sizeof(updater->error_message), "Failed to parse version strings.");
-        updater->status = UPDATE_STATUS_ERROR;
+        updater->status = UPDATE_STATUS_IDLE;
     }
 
+cleanup:
+    if (json) {
+        cJSON_Delete(json);
+    }
     SDL_free(data);
 }
 
@@ -165,48 +149,65 @@ void updater_load_config(UpdaterState* updater) {
     char config_file_path[1024];
     snprintf(config_file_path, sizeof(config_file_path), "%sconfig.json", updater->config_path);
 
-    updater->last_ignored_version[0] = '\0'; // Default to empty string
+    updater->check_on_startup = true; // Default
+    updater->last_ignored_version[0] = '\0';
 
     SDL_IOStream *file = SDL_IOFromFile(config_file_path, "r");
-    if (file) {
-        long size = SDL_GetIOSize(file);
-        char *buffer = (char *)SDL_malloc(size + 1);
-        SDL_ReadIO(file, buffer, size);
-        buffer[size] = '\0';
-        SDL_CloseIO(file);
-
-        char value[32];
-        if (find_json_string_value(buffer, "\"check_on_startup\"", value, sizeof(value))) {
-            updater->check_on_startup = (strcmp(value, "true") == 0);
-        } else {
-            updater->check_on_startup = true; // Default
-        }
-
-        if (find_json_string_value(buffer, "\"last_ignored_version\"", value, sizeof(value))) {
-            strncpy(updater->last_ignored_version, value, sizeof(updater->last_ignored_version) - 1);
-        }
-
-        SDL_free(buffer);
-    } else {
-        updater->check_on_startup = true; // Default
+    if (!file) {
+        return; // No config file, use defaults
     }
+
+    long size = SDL_GetIOSize(file);
+    char *buffer = (char *)SDL_malloc(size + 1);
+    if (!buffer) {
+        SDL_CloseIO(file);
+        return;
+    }
+    SDL_ReadIO(file, buffer, size);
+    buffer[size] = '\0';
+    SDL_CloseIO(file);
+
+    cJSON *json = cJSON_Parse(buffer);
+    if (json) {
+        const cJSON *check_on_startup_item = cJSON_GetObjectItem(json, "check_on_startup");
+        if (cJSON_IsBool(check_on_startup_item)) {
+            updater->check_on_startup = cJSON_IsTrue(check_on_startup_item);
+        }
+
+        const cJSON *last_ignored_item = cJSON_GetObjectItem(json, "last_ignored_version");
+        if (cJSON_IsString(last_ignored_item)) {
+            strncpy(updater->last_ignored_version, last_ignored_item->valuestring, sizeof(updater->last_ignored_version) - 1);
+        }
+        cJSON_Delete(json);
+    }
+
+    SDL_free(buffer);
 }
 
 void updater_save_config(UpdaterState* updater) {
     char config_file_path[1024];
     snprintf(config_file_path, sizeof(config_file_path), "%sconfig.json", updater->config_path);
 
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return;
+
+    cJSON_AddBoolToObject(root, "check_on_startup", updater->check_on_startup);
+    cJSON_AddStringToObject(root, "last_ignored_version", updater->last_ignored_version);
+
+    char *json_string = cJSON_Print(root);
+    cJSON_Delete(root);
+
+    if (!json_string) return;
+
     SDL_IOStream *file = SDL_IOFromFile(config_file_path, "w");
     if (file) {
-        char buffer[256];
-        snprintf(buffer, sizeof(buffer), "{\n  \"check_on_startup\": %s,\n  \"last_ignored_version\": \"%s\"\n}\n",
-                 updater->check_on_startup ? "true" : "false",
-                 updater->last_ignored_version);
-        if (SDL_WriteIO(file, buffer, strlen(buffer)) < strlen(buffer)) {
+        if (SDL_WriteIO(file, json_string, strlen(json_string)) < strlen(json_string)) {
             snprintf(updater->error_message, sizeof(updater->error_message), "Could not write to config.json: %s", SDL_GetError());
         }
         SDL_CloseIO(file);
     }
+
+    free(json_string);
 }
 
 static void run_updater_script(const char* script_path) {
