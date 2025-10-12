@@ -187,7 +187,11 @@ void render_help_modal_content(AppState *app_state) {
     // Auto-update checkbox
     CLAY_AUTO_ID({.layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}, .childGap = 8, .padding = CLAY_PADDING_ALL(4)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
         Clay_OnHover(handle_toggle_check_for_updates, (intptr_t)app_state);
-        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(20), .height = CLAY_SIZING_FIXED(20)}}, .border = {.color = COLOR_WHITE, .width = CLAY_BORDER_ALL(1)}, .backgroundColor = app_state->updater_state->check_on_startup ? COLOR_ACCENT : COLOR_BG_LIGHT});
+        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(20), .height = CLAY_SIZING_FIXED(20)}, .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER}}, .border = {.color = COLOR_WHITE, .width = CLAY_BORDER_ALL(1)}, .backgroundColor = COLOR_BG_LIGHT}) {
+            if (app_state->updater_state->check_on_startup) {
+                CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_FIXED(12), .height = CLAY_SIZING_FIXED(12)}}, .backgroundColor = COLOR_WHITE, .cornerRadius = CLAY_CORNER_RADIUS(2)});
+            }
+        }
         CLAY_TEXT(CLAY_STRING("Check for updates on startup"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
     }
 
