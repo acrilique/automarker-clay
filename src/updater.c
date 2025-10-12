@@ -3,6 +3,7 @@
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef APP_VERSION
@@ -15,6 +16,11 @@ typedef struct {
     UpdaterState *updater_state;
     CurlManager *curl_manager;
 } UpdateCheckData;
+
+typedef struct {
+    UpdaterState *updater;
+    const char* base_path;
+} DownloadCallbackData;
 
 static int parse_version(const char *version_str, int *major, int *minor, int *patch) {
     return sscanf(version_str, "v%d.%d.%d", major, minor, patch);
@@ -217,7 +223,10 @@ static void run_updater_script(const char* script_path) {
 }
 
 static void on_update_download_complete(const char* downloaded_path, bool success, void* userdata) {
-    UpdaterState* updater = (UpdaterState*)userdata;
+    DownloadCallbackData* data = (DownloadCallbackData*)userdata;
+    UpdaterState* updater = data->updater;
+    const char* base_path = data->base_path;
+
     if (success) {
         updater->status = UPDATE_STATUS_IDLE;
         printf("Update downloaded to: %s\n", downloaded_path);
@@ -228,7 +237,7 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
         SDL_IOStream *file = SDL_IOFromFile(script_path, "w");
         if (file) {
             char script_content[2048];
-            char* base_path_escaped = SDL_GetPath(SDL_GetBasePath());
+            char* base_path_escaped = SDL_strdup(base_path);
             for (char* p = base_path_escaped; *p; ++p) if (*p == '\\') *p = '/';
 
             snprintf(script_content, sizeof(script_content),
@@ -250,7 +259,7 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
         SDL_IOStream *file = SDL_IOFromFile(script_path, "w");
         if (file) {
             char script_content[2048];
-            char* app_path = SDL_GetPath(SDL_GetBasePath());
+            char* app_path = SDL_strdup(base_path);
             // On macOS, base_path is inside the .app bundle (e.g., /path/to/automarker-c.app/Contents/Resources/)
             // We need to go up three levels to get the path to the .app bundle itself.
             char* p = strstr(app_path, "/Contents/Resources/");
@@ -276,6 +285,8 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
         snprintf(updater->error_message, sizeof(updater->error_message), "Failed to download update.");
         updater->status = UPDATE_STATUS_ERROR;
     }
+    SDL_free((void*)data->base_path);
+    SDL_free(data);
 }
 
 static void on_update_download_progress(double progress, void* userdata) {
@@ -283,7 +294,7 @@ static void on_update_download_progress(double progress, void* userdata) {
     updater->download_progress = progress;
 }
 
-void updater_start_download(UpdaterState* updater, struct CurlManager* curl_manager, const char* base_path) {
+void updater_start_download(UpdaterState* updater, CurlManager* curl_manager, const char* base_path) {
     if (updater->status != UPDATE_STATUS_AVAILABLE) {
         return;
     }
@@ -298,12 +309,16 @@ void updater_start_download(UpdaterState* updater, struct CurlManager* curl_mana
     snprintf(temp_path, sizeof(temp_path), "%s/update.dmg", SDL_GetPrefPath(NULL, NULL));
 #endif
 
+    DownloadCallbackData* data = SDL_malloc(sizeof(DownloadCallbackData));
+    data->updater = updater;
+    data->base_path = SDL_strdup(base_path);
+
     curl_manager_download_file(
         curl_manager,
         updater->download_url,
         temp_path,
         on_update_download_complete,
         on_update_download_progress,
-        updater
+        data
     );
 }

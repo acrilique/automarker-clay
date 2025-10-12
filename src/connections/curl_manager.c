@@ -18,6 +18,7 @@
 #include "curl_manager.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Forward declaration for the struct
 typedef struct {
@@ -88,4 +89,105 @@ void curl_manager_update(CurlManager *manager) {
             curl_easy_cleanup(e);
         }
     } while (m);
+}
+
+// --- GET Request Implementation ---
+
+typedef struct {
+    char *buffer;
+    size_t size;
+    void (*callback)(const char*, bool, void*);
+    void *userdata;
+} GetRequestData;
+
+static size_t get_write_callback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    GetRequestData *mem = (GetRequestData *)userp;
+
+    char *ptr = realloc(mem->buffer, mem->size + realsize + 1);
+    if(ptr == NULL) {
+        /* out of memory! */ 
+        printf("not enough memory (realloc returned NULL)\n");
+        return 0;
+    }
+
+    mem->buffer = ptr;
+    memcpy(&(mem->buffer[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->buffer[mem->size] = 0;
+
+    return realsize;
+}
+
+void curl_manager_perform_get(CurlManager *manager, const char *url, void (*callback)(const char*, bool, void*), void *userdata) {
+    CURL *easy_handle = curl_easy_init();
+    if (easy_handle) {
+        GetRequestData *request_data = (GetRequestData*)malloc(sizeof(GetRequestData));
+        request_data->buffer = malloc(1);
+        request_data->size = 0;
+        request_data->callback = callback;
+        request_data->userdata = userdata;
+
+        curl_easy_setopt(easy_handle, CURLOPT_URL, url);
+        curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, get_write_callback);
+        curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, (void *)request_data);
+        curl_easy_setopt(easy_handle, CURLOPT_PRIVATE, (void *)request_data);
+        curl_easy_setopt(easy_handle, CURLOPT_USERAGENT, "curl/7.81.0");
+
+        curl_multi_add_handle(manager->multi_handle, easy_handle);
+    }
+}
+
+// --- File Download Implementation ---
+
+typedef struct {
+    FILE *stream;
+    void (*callback)(const char*, bool, void*);
+    void (*progress_callback)(double, void*);
+    void *userdata;
+    char output_path[1024];
+} DownloadRequestData;
+
+static size_t download_write_callback(void *ptr, size_t size, size_t nmemb, void *stream) {
+    return fwrite(ptr, size, nmemb, (FILE *)stream);
+}
+
+static int download_progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+    (void)ultotal;
+    (void)ulnow;
+    DownloadRequestData *data = (DownloadRequestData *)clientp;
+    if (dltotal > 0 && data->progress_callback) {
+        data->progress_callback((double)dlnow / (double)dltotal, data->userdata);
+    }
+    return 0;
+}
+
+void curl_manager_download_file(CurlManager *manager, const char *url, const char *output_path, void (*callback)(const char*, bool, void*), void (*progress_callback)(double, void*), void *userdata) {
+    CURL *easy_handle = curl_easy_init();
+    if (easy_handle) {
+        DownloadRequestData *request_data = (DownloadRequestData*)malloc(sizeof(DownloadRequestData));
+        strncpy(request_data->output_path, output_path, sizeof(request_data->output_path) - 1);
+        request_data->callback = callback;
+        request_data->progress_callback = progress_callback;
+        request_data->userdata = userdata;
+        request_data->stream = fopen(output_path, "wb");
+
+        if (!request_data->stream) {
+            free(request_data);
+            // TODO: Handle error
+            return;
+        }
+
+        curl_easy_setopt(easy_handle, CURLOPT_URL, url);
+        curl_easy_setopt(easy_handle, CURLOPT_WRITEFUNCTION, download_write_callback);
+        curl_easy_setopt(easy_handle, CURLOPT_WRITEDATA, request_data->stream);
+        curl_easy_setopt(easy_handle, CURLOPT_XFERINFOFUNCTION, download_progress_callback);
+        curl_easy_setopt(easy_handle, CURLOPT_XFERINFODATA, request_data);
+        curl_easy_setopt(easy_handle, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(easy_handle, CURLOPT_PRIVATE, (void *)request_data);
+        curl_easy_setopt(easy_handle, CURLOPT_USERAGENT, "curl/7.81.0");
+        curl_easy_setopt(easy_handle, CURLOPT_FOLLOWLOCATION, 1L);
+
+        curl_multi_add_handle(manager->multi_handle, easy_handle);
+    }
 }

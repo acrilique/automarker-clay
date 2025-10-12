@@ -697,7 +697,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
     return SDL_APP_FAILURE;
   }
 
-  state->base_path = SDL_GetBasePath();
+  state->base_path = (char*)SDL_GetBasePath();
   if (!state->base_path) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't get base path: %s", SDL_GetError());
     return SDL_APP_FAILURE;

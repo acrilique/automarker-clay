@@ -2,6 +2,7 @@
 #define UPDATER_H
 
 #include <stdbool.h>
+#include "connections/curl_manager.h"
 
 typedef enum {
     UPDATE_STATUS_IDLE,
@@ -22,14 +23,11 @@ typedef struct {
     char* config_path;
 } UpdaterState;
 
-// Forward declare to avoid including the full headers
-struct CurlManager;
-
 UpdaterState* updater_create(const char* org, const char* app);
 void updater_destroy(UpdaterState* updater);
 
 void updater_check_for_updates(UpdaterState* updater);
-void updater_start_download(UpdaterState* updater, struct CurlManager* curl_manager, const char* base_path);
+void updater_start_download(UpdaterState* updater, CurlManager* curl_manager, const char* base_path);
 
 void updater_load_config(UpdaterState* updater);
 void updater_save_config(UpdaterState* updater);
