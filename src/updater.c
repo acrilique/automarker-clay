@@ -202,7 +202,9 @@ void updater_save_config(UpdaterState* updater) {
         snprintf(buffer, sizeof(buffer), "{\n  \"check_on_startup\": %s,\n  \"last_ignored_version\": \"%s\"\n}\n",
                  updater->check_on_startup ? "true" : "false",
                  updater->last_ignored_version);
-        SDL_WriteIO(file, buffer, strlen(buffer));
+        if (SDL_WriteIO(file, buffer, strlen(buffer)) < strlen(buffer)) {
+            snprintf(updater->error_message, sizeof(updater->error_message), "Could not write to config.json: %s", SDL_GetError());
+        }
         SDL_CloseIO(file);
     }
 }
