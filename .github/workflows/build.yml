@@ -26,7 +26,7 @@ jobs:
       if: matrix.arch == 'x86_64'
       run: |
         arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
-        arch -x86_64 /usr/local/bin/brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp libpng
+        arch -x86_64 /usr/local/bin/brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp libpng cjson
 
     - name: Configure CMake
       run: >
@@ -167,14 +167,13 @@ jobs:
         compression-level: 0
 
   release:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
     needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    environment: deploy
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
