@@ -154,18 +154,24 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
     
     // Draw selection
     if (data->selection_end > data->selection_start) {
-        float start_x = -1, end_x = -1;
+        float start_x, end_x;
 
-        if (data->selection_start >= startSample && data->selection_start < startSample + visibleSamples) {
-            start_x = rect.x + ((float)(data->selection_start - startSample) / visibleSamples) * width;
-        } else if (data->selection_start < startSample) {
+        // Calculate screen x for selection start, clamped to view
+        if (data->selection_start <= startSample) {
             start_x = rect.x;
+        } else if (data->selection_start >= startSample + visibleSamples) {
+            start_x = rect.x + width;
+        } else {
+            start_x = rect.x + ((float)(data->selection_start - startSample) / visibleSamples) * width;
         }
 
-        if (data->selection_end > startSample && data->selection_end <= startSample + visibleSamples) {
-            end_x = rect.x + ((float)(data->selection_end - startSample) / visibleSamples) * width;
-        } else if (data->selection_end > startSample + visibleSamples) {
+        // Calculate screen x for selection end, clamped to view
+        if (data->selection_end <= startSample) {
+            end_x = rect.x;
+        } else if (data->selection_end >= startSample + visibleSamples) {
             end_x = rect.x + width;
+        } else {
+            end_x = rect.x + ((float)(data->selection_end - startSample) / visibleSamples) * width;
         }
 
         SDL_SetRenderDrawBlendMode(rendererData->renderer, SDL_BLENDMODE_BLEND);
@@ -182,7 +188,7 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
         }
 
         // Draw selection handles
-        if (data->selection_start > 0) {
+        if (data->selection_start > 0 && data->selection_start >= startSample && data->selection_start < startSample + visibleSamples) {
             if (data->is_hovering_selection_start) {
                 SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 255, 255);
             } else {
@@ -190,7 +196,7 @@ static void DrawWaveform(Clay_SDL3RendererData *rendererData, SDL_FRect rect, Wa
             }
             SDL_RenderLine(rendererData->renderer, start_x, rect.y, start_x, rect.y + height);
         }
-        if (data->selection_end < (unsigned int)data->sampleCount) {
+        if (data->selection_end < (unsigned int)data->sampleCount && data->selection_end > startSample && data->selection_end <= startSample + visibleSamples) {
             if (data->is_hovering_selection_end) {
                 SDL_SetRenderDrawColor(rendererData->renderer, 100, 100, 255, 255);
             } else {
