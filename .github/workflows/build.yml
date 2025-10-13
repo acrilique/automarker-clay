@@ -109,9 +109,19 @@ jobs:
         # Staple the notarization ticket
         xcrun stapler staple -v "$OUT_DMG"
 
-        # Validate stapling and Gatekeeper assessment for the DMG
+        # Validate stapling
         xcrun stapler validate "$OUT_DMG"
-        spctl --assess -vv --type open "$OUT_DMG"
+
+        # Mount DMG and assess the contained app with Gatekeeper
+        MOUNT_POINT="$RUNNER_TEMP/mnt"
+        mkdir -p "$MOUNT_POINT"
+        hdiutil attach "$OUT_DMG" -nobrowse -mountpoint "$MOUNT_POINT" -quiet
+        APP_IN_DMG=$(find "$MOUNT_POINT" -maxdepth 1 -name "automarker-c.app" -print -quit)
+        if [[ -z "${APP_IN_DMG:-}" ]]; then
+          echo "App not found inside DMG"; hdiutil detach "$MOUNT_POINT" -quiet; exit 1
+        fi
+        spctl --assess -vv --type execute "$APP_IN_DMG"
+        hdiutil detach "$MOUNT_POINT" -quiet
 
 
     - name: Rename package
