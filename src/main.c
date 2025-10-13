@@ -231,9 +231,9 @@ void render_update_modal_content(AppState *app_state) {
         }
     } else {
         CLAY_TEXT(CLAY_STRING("Update Available"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
-        char update_text[256];
+        static char update_text[256];
         snprintf(update_text, sizeof(update_text), "A new version (%s) is available. Do you want to update?", app_state->updater_state->latest_version);
-        Clay_String update_string = { .isStaticallyAllocated = false, .length = (int32_t)strlen(update_text), .chars = update_text };  
+        Clay_String update_string = { .isStaticallyAllocated = true, .length = (int32_t)strlen(update_text), .chars = update_text };  
         CLAY_TEXT(update_string, CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
 
         CLAY_AUTO_ID({.layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 8, .sizing = {.width = CLAY_SIZING_GROW(0)}}}) {
@@ -1101,7 +1101,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
                    "Help", handleHelp, (intptr_t)state);
 
       if (state->updater_state->status == UPDATE_STATUS_AVAILABLE) {
-        char tooltip[128];
+        static char tooltip[128];
         snprintf(tooltip, sizeof(tooltip), "Update to %s", state->updater_state->latest_version);
         headerButton(CLAY_ID("UpdateButton"), CLAY_ID("UpdateIcon"), state->update_icon,
                      tooltip, handle_update_button, (intptr_t)state);
