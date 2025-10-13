@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.27)
 
 # Project setup
-project(automarker-c VERSION 0.2.1 LANGUAGES C)
+project(automarker-c VERSION 0.2.2 LANGUAGES C)
 set(CMAKE_C_STANDARD 99)
 
 option(MACOS_BUNDLE "Create a macOS bundle structure" OFF)
