@@ -54,6 +54,8 @@ jobs:
         API_ISSUER_ID: ${{ secrets.API_ISSUER_ID }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       run: |
+        set -euo pipefail
+
         # Create a temporary keychain
         KEYCHAIN_PATH=$RUNNER_TEMP/app.keychain
         security create-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
@@ -69,43 +71,54 @@ jobs:
         mkdir -p $RUNNER_TEMP/private_keys
         printf "%s" "$API_KEY_P8_BASE64" | base64 --decode > $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8
         
-        # Sign the application bundle
+        # Package to create CPack staging (this may modify binaries with install_name_tool)
+        (cd build && cpack)
+
+        # Find the staged app inside CPack's staging area (after any fixups)
+        STAGED_APP=$(find build/_CPack_Packages -type d -path "*/ALL_IN_ONE/*.app" -name "automarker-c.app" -print -quit)
+        if [[ -z "${STAGED_APP:-}" ]]; then
+          echo "Staged app not found"; exit 1
+        fi
+
+        # Re-sign the staged .app to ensure signature matches final contents
         codesign --force --deep --options runtime --timestamp \
           --entitlements automarker-c.entitlements \
           --sign "Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
-          build/Release/automarker-c.app
-        
+          "$STAGED_APP"
+
         # Verify the app signature
-        codesign --verify --deep --strict --verbose=2 build/Release/automarker-c.app
-        
-        # Package (create DMG)
-        (cd build && cpack)
-        
-        # Find the created DMG
-        DMG_PATH=$(find build -name "*.dmg" -print -quit)
+        codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
+
+        # Create a fresh DMG from the signed staging folder
+        STAGING_DIR="$(dirname "$STAGED_APP")"
+        OUT_DMG="build/automarker-c-macos-${{ matrix.arch }}.dmg"
+        hdiutil create -volname "automarker-c" -srcfolder "$STAGING_DIR" -ov -format UDZO "$OUT_DMG"
 
         # Sign the DMG
         codesign --force --options runtime --timestamp \
           --sign "Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
-          "$DMG_PATH"
+          "$OUT_DMG"
           
         # Notarize the DMG
-        xcrun notarytool submit "$DMG_PATH" \
+        xcrun notarytool submit "$OUT_DMG" \
           --key $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8 \
           --key-id ${API_KEY_ID} \
           --issuer ${API_ISSUER_ID} \
           --wait
           
         # Staple the notarization ticket
-        xcrun stapler staple -v "$DMG_PATH"
+        xcrun stapler staple -v "$OUT_DMG"
         
         # Verify the final package
-        spctl -a -vv "$DMG_PATH"
+        spctl -a -vv "$OUT_DMG"
 
     - name: Rename package
       run: |
         DMG_PATH=$(find build -name "*.dmg" -print -quit)
-        mv "$DMG_PATH" build/automarker-c-macos-${{ matrix.arch }}.dmg
+        TARGET="build/automarker-c-macos-${{ matrix.arch }}.dmg"
+        if [ "$DMG_PATH" != "$TARGET" ]; then
+          mv "$DMG_PATH" "$TARGET"
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
