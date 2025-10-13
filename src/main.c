@@ -85,7 +85,8 @@ typedef enum {
   INTERACTION_DRAGGING_PLAYHEAD,
   INTERACTION_DRAGGING_START_MARKER,
   INTERACTION_DRAGGING_END_MARKER,
-  INTERACTION_DRAGGING_SELECTION
+  INTERACTION_DRAGGING_SELECTION,
+  INTERACTION_DRAGGING_SCROLLBAR
 } WaveformInteractionState;
 
 typedef struct app_state AppState;
@@ -122,6 +123,9 @@ struct app_state {
   bool is_selection_dragging;
   unsigned int selection_drag_start;
   Clay_BoundingBox waveform_bbox;
+  bool is_hovering_scrollbar_thumb;
+  float scrollbar_drag_start_x;
+  float scrollbar_drag_start_scroll;
 
   // Tooltip state
   bool is_tooltip_visible;
@@ -547,37 +551,46 @@ static void handleWaveformInteraction(Clay_ElementId elementId,
       app_state->waveform_interaction_state = INTERACTION_DRAGGING_PLAYHEAD;
       audio_state_set_playback_position(audio_state, clicked_sample);
     }
-  } else if (pointerData.state == CLAY_POINTER_DATA_PRESSED) {
-    switch (app_state->waveform_interaction_state) {
-    case INTERACTION_DRAGGING_PLAYHEAD:
-      audio_state_set_playback_position(audio_state, clicked_sample);
-      break;
-    case INTERACTION_DRAGGING_START_MARKER:
-      if (clicked_sample < audio_state->selection_end) {
-        audio_state->selection_start = clicked_sample;
-      }
-      break;
-    case INTERACTION_DRAGGING_END_MARKER:
-      if (clicked_sample > audio_state->selection_start) {
-        audio_state->selection_end = clicked_sample;
-      }
-      break;
-    case INTERACTION_DRAGGING_SELECTION:
-      if (clicked_sample > app_state->selection_drag_start) {
-        audio_state->selection_start = app_state->selection_drag_start;
-        audio_state->selection_end = clicked_sample;
-      } else {
-        audio_state->selection_start = clicked_sample;
-        audio_state->selection_end = app_state->selection_drag_start;
-      }
-      break;
-    case INTERACTION_NONE:
-      // Do nothing if not dragging
-      break;
-    }
-  } else { // Not pressed
-    app_state->waveform_interaction_state = INTERACTION_NONE;
   }
+}
+
+static void handleScrollbarInteraction(Clay_ElementId elementId,
+                                       Clay_PointerData pointerData,
+                                       intptr_t userData) {
+  AppState *app_state = (AppState *)userData;
+  Clay_ElementData scrollbar_element = Clay_GetElementData(elementId);
+  if (!scrollbar_element.found) {
+    return;
+  }
+
+  float scrollbar_width = app_state->waveform_bbox.width;
+  if (scrollbar_width <= 0)
+    return; // Avoid division by zero if not rendered yet
+
+  float thumb_width = (scrollbar_width / app_state->waveform_view.zoom);
+  float track_width = scrollbar_width - thumb_width;
+  if (track_width <= 0)
+    return; // No room to scroll
+
+  if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+    if (app_state->is_hovering_scrollbar_thumb) {
+      app_state->waveform_interaction_state = INTERACTION_DRAGGING_SCROLLBAR;
+      app_state->scrollbar_drag_start_x = pointerData.position.x;
+      app_state->scrollbar_drag_start_scroll = app_state->waveform_view.scroll;
+    } else {
+      // Clicked on track, jump scroll
+      float click_x =
+          pointerData.position.x - scrollbar_element.boundingBox.x;
+      app_state->waveform_view.scroll =
+          (click_x - thumb_width / 2) / track_width;
+    }
+  }
+
+  // Clamp scroll to valid range [0, 1]
+  if (app_state->waveform_view.scroll < 0.0f)
+    app_state->waveform_view.scroll = 0.0f;
+  if (app_state->waveform_view.scroll > 1.0f)
+    app_state->waveform_view.scroll = 1.0f;
 }
 
 static void handlePlayPause(Clay_ElementId elementId, Clay_PointerData pointerData,
@@ -907,6 +920,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->is_selection_dragging = false;
   state->selection_drag_start = 0;
   state->waveform_bbox = (Clay_BoundingBox){0, 0, 0, 0};
+  state->is_hovering_scrollbar_thumb = false;
+  state->scrollbar_drag_start_x = 0.0f;
+  state->scrollbar_drag_start_scroll = 0.0f;
 
   state->is_tooltip_visible = false;
   state->tooltip_text = "";
@@ -940,11 +956,85 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     Clay_SetLayoutDimensions((Clay_Dimensions){(float)event->window.data1,
                                                (float)event->window.data2});
     break;
-  case SDL_EVENT_MOUSE_MOTION:
+  case SDL_EVENT_MOUSE_MOTION: {
+    AppState *state = (AppState *)appstate;
     Clay_SetPointerState((Clay_Vector2){event->motion.x, event->motion.y},
                          event->motion.state & SDL_BUTTON_LMASK);
-    break;
+
+    if (state->waveform_interaction_state != INTERACTION_NONE) {
+      if (state->waveform_interaction_state ==
+          INTERACTION_DRAGGING_SCROLLBAR) {
+        float scrollbar_width = state->waveform_bbox.width;
+        if (scrollbar_width > 0) {
+          float thumb_width =
+              (scrollbar_width / state->waveform_view.zoom);
+          float track_width = scrollbar_width - thumb_width;
+          if (track_width > 0) {
+            float delta_x =
+                event->motion.x - state->scrollbar_drag_start_x;
+            float delta_scroll = delta_x / track_width;
+            state->waveform_view.scroll =
+                state->scrollbar_drag_start_scroll + delta_scroll;
+
+            // Clamp scroll
+            if (state->waveform_view.scroll < 0.0f)
+              state->waveform_view.scroll = 0.0f;
+            if (state->waveform_view.scroll > 1.0f)
+              state->waveform_view.scroll = 1.0f;
+          }
+        }
+      } else {
+        AudioState *audio_state = state->audio_state;
+        float click_x = event->motion.x - state->waveform_bbox.x;
+        float waveform_width = state->waveform_bbox.width;
+
+        unsigned int visibleSamples =
+            (unsigned int)(audio_state->sample->buffer_size /
+                           sizeof(float) / state->waveform_view.zoom);
+        unsigned int maxStartSample =
+            (audio_state->sample->buffer_size / sizeof(float)) -
+            visibleSamples;
+        unsigned int startSample =
+            (unsigned int)(state->waveform_view.scroll * maxStartSample);
+        unsigned int clicked_sample =
+            startSample +
+            (unsigned int)((click_x / waveform_width) * visibleSamples);
+
+        switch (state->waveform_interaction_state) {
+        case INTERACTION_DRAGGING_PLAYHEAD:
+          audio_state_set_playback_position(audio_state, clicked_sample);
+          break;
+        case INTERACTION_DRAGGING_START_MARKER:
+          if (clicked_sample < audio_state->selection_end) {
+            audio_state->selection_start = clicked_sample;
+          }
+          break;
+        case INTERACTION_DRAGGING_END_MARKER:
+          if (clicked_sample > audio_state->selection_start) {
+            audio_state->selection_end = clicked_sample;
+          }
+          break;
+        case INTERACTION_DRAGGING_SELECTION:
+          if (clicked_sample > state->selection_drag_start) {
+            audio_state->selection_start = state->selection_drag_start;
+            audio_state->selection_end = clicked_sample;
+          } else {
+            audio_state->selection_start = clicked_sample;
+            audio_state->selection_end = state->selection_drag_start;
+          }
+          break;
+        default:
+          break;
+        }
+      }
+    }
+  } break;
   case SDL_EVENT_MOUSE_BUTTON_UP:
+    if (event->button.button == SDL_BUTTON_LEFT) {
+        AppState *state = (AppState *)appstate;
+        state->waveform_interaction_state = INTERACTION_NONE;
+    }
+    // Fall through to the MOUSE_BUTTON_DOWN case
   case SDL_EVENT_MOUSE_BUTTON_DOWN: {
     AppState *state = (AppState *)appstate;
     float x, y;
@@ -956,7 +1046,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     bool ctrl_pressed = mod_state & SDL_KMOD_CTRL;
     bool shift_pressed = mod_state & SDL_KMOD_SHIFT;
 
-    if (event->button.button == SDL_BUTTON_RIGHT && event->button.down) {
+    if (event->button.button == SDL_BUTTON_RIGHT && event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
       if (ctrl_pressed && shift_pressed) {
         if (event->button.x >= state->waveform_bbox.x &&
             event->button.x <= state->waveform_bbox.x + state->waveform_bbox.width &&
@@ -983,7 +1073,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         state->context_menu.y = (int)event->button.y;
         state->context_menu.visible = true;
       }
-    } else if (event->button.button == SDL_BUTTON_LEFT && event->button.down) {
+    } else if (event->button.button == SDL_BUTTON_LEFT && event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
       state->context_menu.visible = false;
     }
     break;
@@ -1060,6 +1150,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 SDL_AppResult SDL_AppIterate(void *appstate) {
   AppState *state = appstate;
   state->is_tooltip_visible = false;
+  state->is_hovering_scrollbar_thumb = false;
 
   curl_manager_update(state->curl_manager);
 
@@ -1312,15 +1403,37 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
       }
       SDL_UnlockMutex(state->audio_state->data_mutex);
 
-      // Create custom element in the UI
-      CLAY(CLAY_ID("WaveformDisplay"), {
-        .backgroundColor = COLOR_WAVEFORM_BG,
-        .layout = {.sizing = {.width = CLAY_SIZING_GROW(0),
-                              .height = CLAY_SIZING_GROW(0)}},
-        .cornerRadius = CLAY_CORNER_RADIUS(8),
-        .custom = {.customData = &state->waveformData},
-      }) {
-        Clay_OnHover(handleWaveformInteraction, (intptr_t)state);
+      CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(1)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 8}}) {
+        // Create custom element in the UI
+        CLAY(CLAY_ID("WaveformDisplay"), {
+          .backgroundColor = COLOR_WAVEFORM_BG,
+          .layout = {.sizing = {.width = CLAY_SIZING_GROW(0),
+                                .height = CLAY_SIZING_GROW(1)}},
+          .cornerRadius = CLAY_CORNER_RADIUS(8),
+          .custom = {.customData = &state->waveformData},
+        }) {
+          Clay_OnHover(handleWaveformInteraction, (intptr_t)state);
+        }
+
+        // Scrollbar
+        if (state->audio_state->status == STATUS_COMPLETED && state->waveform_view.zoom > 1.0f) {
+            CLAY(CLAY_ID("Scrollbar"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(12)}, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOR_WAVEFORM_BG, .cornerRadius = CLAY_CORNER_RADIUS(6)}) {
+                Clay_OnHover(handleScrollbarInteraction, (intptr_t)state);
+                float scrollbar_width = state->waveform_bbox.width;
+                if (scrollbar_width > 0) {
+                    float thumb_width = (scrollbar_width / state->waveform_view.zoom);
+                    float track_width = scrollbar_width - thumb_width;
+                    float thumb_x = state->waveform_view.scroll * track_width;
+
+                    CLAY(CLAY_ID("ScrollbarThumb"), {.layout = {.sizing = {.width = CLAY_SIZING_FIXED(thumb_width), .height = CLAY_SIZING_FIXED(10)}}, .floating = {.attachTo = CLAY_ATTACH_TO_PARENT, .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH, .attachPoints = {.parent = CLAY_ATTACH_POINT_LEFT_CENTER, .element = CLAY_ATTACH_POINT_LEFT_CENTER}, .offset = {thumb_x, 0}}}) {
+                        if (Clay_PointerOver(CLAY_ID("ScrollbarThumb"))) {
+                            state->is_hovering_scrollbar_thumb = true;
+                        }
+                        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}}, .backgroundColor = state->is_hovering_scrollbar_thumb ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)});
+                    }
+                }
+            }
+        }
       }
     }
   }
