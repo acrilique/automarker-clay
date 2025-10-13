@@ -1099,9 +1099,13 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
       headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
                    "Help", handleHelp, (intptr_t)state);
 
-      if (state->updater_state->status == UPDATE_STATUS_AVAILABLE) {
+      if (state->updater_state->status == UPDATE_STATUS_AVAILABLE || state->updater_state->status == UPDATE_STATUS_DOWNLOADING) {
         static char tooltip[128];
-        snprintf(tooltip, sizeof(tooltip), "Update to %s", state->updater_state->latest_version);
+        if (state->updater_state->status == UPDATE_STATUS_DOWNLOADING) {
+            snprintf(tooltip, sizeof(tooltip), "Downloading update... (%.0f%%)", state->updater_state->download_progress * 100);
+        } else {
+            snprintf(tooltip, sizeof(tooltip), "Update to %s", state->updater_state->latest_version);
+        }
         headerButton(CLAY_ID("UpdateButton"), CLAY_ID("UpdateIcon"), state->update_icon,
                      tooltip, handle_update_button, (intptr_t)state);
       }
