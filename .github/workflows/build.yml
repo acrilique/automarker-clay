@@ -44,11 +44,68 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Package
-      run: (cd build && cpack)
+    - name: Sign and Notarize
+      if: success()
+      env:
+        MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+        MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        API_KEY_P8_BASE64: ${{ secrets.API_KEY_P8_BASE64 }}
+        API_KEY_ID: ${{ secrets.API_KEY_ID }}
+        API_ISSUER_ID: ${{ secrets.API_ISSUER_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        # Create a temporary keychain
+        KEYCHAIN_PATH=$RUNNER_TEMP/app.keychain
+        security create-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
+        security list-keychains -s $KEYCHAIN_PATH
+        security unlock-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
+        
+        # Decode and import the certificate
+        echo $MAC_CERT_P12_BASE64 | base64 --decode > $RUNNER_TEMP/certificate.p12
+        security import $RUNNER_TEMP/certificate.p12 -k $KEYCHAIN_PATH -P $MAC_CERT_PASSWORD -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "temporary_keychain_password" $KEYCHAIN_PATH
+        
+        # Decode and save the App Store Connect API key
+        mkdir -p $RUNNER_TEMP/private_keys
+        echo $API_KEY_P8_BASE64 | base64 --decode > $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8
+        
+        # Sign the application bundle
+        codesign --force --deep --options runtime --timestamp \
+          --entitlements automarker-c.entitlements \
+          --sign "Developer ID Application: Lluc Simo Margalef (${APPLE_TEAM_ID})" \
+          build/Release/automarker-c.app
+        
+        # Verify the app signature
+        codesign --verify --deep --strict --verbose=2 build/Release/automarker-c.app
+        
+        # Package (create DMG)
+        (cd build && cpack)
+        
+        # Find the created DMG
+        DMG_PATH=$(find build -name "*.dmg" -print -quit)
+
+        # Sign the DMG
+        codesign --force --options runtime --timestamp \
+          --sign "Developer ID Application: Lluc Simo Margalef (${APPLE_TEAM_ID})" \
+          "$DMG_PATH"
+          
+        # Notarize the DMG
+        xcrun notarytool submit "$DMG_PATH" \
+          --key $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8 \
+          --key-id ${API_KEY_ID} \
+          --issuer ${API_ISSUER_ID} \
+          --wait
+          
+        # Staple the notarization ticket
+        xcrun stapler staple -v "$DMG_PATH"
+        
+        # Verify the final package
+        spctl -a -vv "$DMG_PATH"
 
     - name: Rename package
-      run: mv build/*.dmg build/automarker-c-macos-${{ matrix.arch }}.dmg
+      run: |
+        DMG_PATH=$(find build -name "*.dmg" -print -quit)
+        mv "$DMG_PATH" build/automarker-c-macos-${{ matrix.arch }}.dmg
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
