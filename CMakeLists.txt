@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.27)
 
 # Project setup
-project(automarker-c VERSION 0.1.0)
+project(automarker-c VERSION 0.2.0)
 set(CMAKE_PROJECT_VERSION "${PROJECT_VERSION}")
 project(automarker-c C)
 set(CMAKE_C_STANDARD 99)
@@ -32,12 +32,14 @@ if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
     find_package(SDL3_image CONFIG REQUIRED)
     find_package(SDL3_ttf CONFIG REQUIRED)
     find_package(CURL CONFIG REQUIRED)
+    find_package(cJSON CONFIG REQUIRED)
 else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SDL3 REQUIRED sdl3)
     pkg_check_modules(SDL3_TTF REQUIRED sdl3-ttf)
     pkg_check_modules(SDL3_IMAGE REQUIRED sdl3-image)
     pkg_check_modules(CURL REQUIRED libcurl)
+    pkg_check_modules(CJSON REQUIRED libcjson)
 endif()
 
 add_subdirectory(libs/SDL_sound EXCLUDE_FROM_ALL)
@@ -51,6 +53,7 @@ endif()
 if(MACOS_BUNDLE)
     add_executable(${PROJECT_NAME} MACOSX_BUNDLE
         src/main.c
+        src/updater.c
         src/audio_state.c
         src/connections/process_utils.c
         src/connections/premiere_pro.c
@@ -61,6 +64,7 @@ if(MACOS_BUNDLE)
 else()
     add_executable(${PROJECT_NAME}
         src/main.c
+        src/updater.c
         src/audio_state.c
         src/connections/process_utils.c
         src/connections/premiere_pro.c
@@ -69,6 +73,8 @@ else()
         src/connections/curl_manager.c
         libs/tinyfiledialogs/tinyfiledialogs.c)
 endif()
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${PROJECT_VERSION}")
 
 if(MACOS_BUNDLE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE MACOS_BUNDLE)
@@ -136,6 +142,7 @@ if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
         SDL3_image::SDL3_image
         SDL3_ttf::SDL3_ttf
         CURL::libcurl
+        cjson
         SDL3_sound::SDL3_sound
         CARA::CARA
     )
@@ -145,6 +152,7 @@ else()
         ${SDL3_TTF_INCLUDE_DIRS}
         ${SDL3_IMAGE_INCLUDE_DIRS}
         ${CURL_INCLUDE_DIRS}
+        ${CJSON_INCLUDE_DIRS}
     )
 
     target_link_directories(${PROJECT_NAME} PRIVATE
@@ -152,6 +160,7 @@ else()
         ${SDL3_TTF_LIBRARY_DIRS}
         ${SDL3_IMAGE_LIBRARY_DIRS}
         ${CURL_LIBRARY_DIRS}
+        ${CJSON_LIBRARY_DIRS}
     )
 
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -159,6 +168,7 @@ else()
         ${SDL3_TTF_LIBRARIES}
         ${SDL3_IMAGE_LIBRARIES}
         ${CURL_LIBRARIES}
+        ${CJSON_LIBRARIES}
         SDL3_sound::SDL3_sound
         CARA::CARA
     )
@@ -168,6 +178,7 @@ else()
         ${SDL3_TTF_CFLAGS_OTHER}
         ${SDL3_IMAGE_CFLAGS_OTHER}
         ${CURL_CFLAGS_OTHER}
+        ${CJSON_CFLAGS_OTHER}
     )
 endif()
 

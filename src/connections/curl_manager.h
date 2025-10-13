@@ -19,15 +19,25 @@
 #define CURL_MANAGER_H
 
 #include <curl/curl.h>
+#include <stdbool.h>
 
-typedef struct {
+typedef struct CurlManager {
     CURLM *multi_handle;
     int still_running;
 } CurlManager;
 
+typedef enum {
+    REQUEST_TYPE_GET,
+    REQUEST_TYPE_DOWNLOAD,
+    REQUEST_TYPE_JSX,
+} RequestType;
+
 CurlManager* curl_manager_create();
 void curl_manager_destroy(CurlManager *manager);
-void curl_manager_add_handle(CurlManager *manager, CURL *easy_handle);
+void curl_manager_add_handle(CurlManager *manager, CURL *easy_handle, RequestType type, void* data);
 void curl_manager_update(CurlManager *manager);
+
+void curl_manager_perform_get(CurlManager *manager, const char *url, void (*callback)(const char*, bool, void*), void *userdata);
+void curl_manager_download_file(CurlManager *manager, const char *url, const char *output_path, void (*callback)(const char*, bool, void*), void (*progress_callback)(double, void*), void *userdata);
 
 #endif // CURL_MANAGER_H
