@@ -1292,7 +1292,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
   AppState *state = appstate;
 
   if (state) {
-    SDL_free(state->base_path);
     SDL_DetachThread(state->app_status_thread);
     audio_state_destroy(state->audio_state);
 

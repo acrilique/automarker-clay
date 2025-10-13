@@ -237,7 +237,9 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
 
 #ifdef _WIN32
         char script_path[1024];
-        snprintf(script_path, sizeof(script_path), "%s\\update.ps1", SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP));
+        char* pref_path = SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP);
+        snprintf(script_path, sizeof(script_path), "%s\\update.ps1", pref_path);
+        SDL_free(pref_path);
         SDL_IOStream *file = SDL_IOFromFile(script_path, "w");
         if (file) {
             char script_content[2048];
@@ -259,7 +261,9 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
         }
 #else
         char script_path[1024];
-        snprintf(script_path, sizeof(script_path), "%s/update.sh", SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP));
+        char* pref_path = SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP);
+        snprintf(script_path, sizeof(script_path), "%s/update.sh", pref_path);
+        SDL_free(pref_path);
         SDL_IOStream *file = SDL_IOFromFile(script_path, "w");
         if (file) {
             char script_content[2048];
@@ -307,11 +311,13 @@ void updater_start_download(UpdaterState* updater, CurlManager* curl_manager, co
     updater->download_progress = 0.0;
 
     char temp_path[1024];
+    char* pref_path = SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP);
 #ifdef _WIN32
-    snprintf(temp_path, sizeof(temp_path), "%s\\update.zip", SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP));
+    snprintf(temp_path, sizeof(temp_path), "%s\\update.zip", pref_path);
 #else
-    snprintf(temp_path, sizeof(temp_path), "%s/update.dmg", SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP));
+    snprintf(temp_path, sizeof(temp_path), "%s/update.dmg", pref_path);
 #endif
+    SDL_free(pref_path);
 
     DownloadCallbackData* data = SDL_malloc(sizeof(DownloadCallbackData));
     data->updater = updater;
