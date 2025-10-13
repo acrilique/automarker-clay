@@ -22,6 +22,10 @@
 #include <curl/curl.h>
 
 #include <stdio.h>
+#include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "../libs/SDL_sound/include/SDL3_sound/SDL_sound.h"
 #include "../libs/tinyfiledialogs/tinyfiledialogs.h"
@@ -38,6 +42,10 @@
 #include "connections/resolve.h"
 #include "connections/curl_manager.h"
 #include "updater.h"
+
+#ifndef APP_VERSION
+#define APP_VERSION "0.0.0"
+#endif
 
 // Font IDs
 static const Uint32 FONT_REGULAR = 0;
@@ -171,6 +179,28 @@ static void handle_install_cep_extension(Clay_ElementId elementId,
   }
 }
 
+static void handle_open_browser(const char* url) {
+    #ifdef _WIN32
+        ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+    #elif __APPLE__
+        char command[256];
+        snprintf(command, sizeof(command), "open %s", url);
+        system(command);
+    #else
+        char command[256];
+        snprintf(command, sizeof(command), "xdg-open %s", url);
+        system(command);
+    #endif
+}
+
+static void handle_open_github_issues(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
+    (void)elementId;
+    (void)userData;
+    if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        handle_open_browser("https://github.com/acrilique/automarker-clay/issues");
+    }
+}
+
 static void handle_toggle_check_for_updates(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
     (void)elementId;
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
@@ -180,9 +210,23 @@ static void handle_toggle_check_for_updates(Clay_ElementId elementId, Clay_Point
     }
 }
 
+static inline void render_separator() {
+    CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW()}, .padding = {.top = 2, .bottom = 2}}}) {
+        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(), .height = CLAY_SIZING_FIXED(2)}}, .backgroundColor = COLOR_BG_DARK});
+    }
+}
+
 static void render_help_modal_content(AppState *app_state) {
-    CLAY_TEXT(CLAY_STRING("Help"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
-    CLAY_TEXT(CLAY_STRING("This is a placeholder for the help content."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    CLAY_TEXT(CLAY_STRING("Options"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+    
+    // CEP Section
+    CLAY_TEXT(CLAY_STRING("The CEP extension allows this app to communicate with Adobe Premiere Pro. If Premiere was running during the extension's installation, you'll need to restart it for the extension to be loaded."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+        Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
+        CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    }
+
+    render_separator();
 
     // Auto-update checkbox
     CLAY_AUTO_ID({.layout = {.layoutDirection = CLAY_LEFT_TO_RIGHT, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}, .childGap = 8, .padding = CLAY_PADDING_ALL(4)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
@@ -195,10 +239,23 @@ static void render_help_modal_content(AppState *app_state) {
         CLAY_TEXT(CLAY_STRING("Check for updates on startup"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
     }
 
-    CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
-        Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
-        CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    render_separator();
+
+    // Help/Issues Section
+    CLAY_AUTO_ID({.layout = {.childGap = 8, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } }}) {
+      CLAY_TEXT(CLAY_STRING("Encountered a bug or need help?"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+      CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+          Clay_OnHover(handle_open_github_issues, (intptr_t)app_state);
+          CLAY_TEXT(CLAY_STRING("Get help"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+      }
     }
+
+    render_separator();
+
+    static char version_text[128];
+    snprintf(version_text, sizeof(version_text), "automarker %s by acrilique", APP_VERSION);
+    Clay_String version_string = { .isStaticallyAllocated = true, .length = (int32_t)strlen(version_text), .chars = version_text };
+    CLAY_TEXT(version_string, CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
 }
 
 static void handle_update_now(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData) {
