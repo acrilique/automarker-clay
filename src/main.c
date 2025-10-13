@@ -206,7 +206,6 @@ static void handle_update_now(Clay_ElementId elementId, Clay_PointerData pointer
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
         AppState *app_state = (AppState *)userData;
         updater_start_download(app_state->updater_state, app_state->curl_manager, app_state->base_path);
-        app_state->modal.visible = false;
     }
 }
 
