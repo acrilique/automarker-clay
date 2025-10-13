@@ -1,6 +1,9 @@
 #ifndef UPDATER_H
 #define UPDATER_H
 
+#define UPDATER_ORG "acrilique"
+#define UPDATER_APP "automarker-c"
+
 #include <stdbool.h>
 #include "connections/curl_manager.h"
 
@@ -23,7 +26,7 @@ typedef struct {
     char* config_path;
 } UpdaterState;
 
-UpdaterState* updater_create(const char* org, const char* app);
+UpdaterState* updater_create(void);
 void updater_destroy(UpdaterState* updater);
 
 void updater_check_for_updates(UpdaterState* updater, CurlManager* curl_manager);

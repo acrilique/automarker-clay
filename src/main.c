@@ -863,7 +863,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
 
   state->curl_manager = curl_manager_create();
-  state->updater_state = updater_create("acrilique", "automarker-c");
+  state->updater_state = updater_create();
 
   if (state->updater_state->check_on_startup) {
       updater_check_for_updates(state->updater_state, state->curl_manager);
