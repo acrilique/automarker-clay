@@ -72,7 +72,7 @@ jobs:
         # Sign the application bundle
         codesign --force --deep --options runtime --timestamp \
           --entitlements automarker-c.entitlements \
-          --sign "Developer ID Application: Lluc Simo Margalef (${APPLE_TEAM_ID})" \
+          --sign "Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
           build/Release/automarker-c.app
         
         # Verify the app signature
@@ -86,7 +86,7 @@ jobs:
 
         # Sign the DMG
         codesign --force --options runtime --timestamp \
-          --sign "Developer ID Application: Lluc Simo Margalef (${APPLE_TEAM_ID})" \
+          --sign "Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
           "$DMG_PATH"
           
         # Notarize the DMG
