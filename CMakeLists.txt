@@ -142,7 +142,7 @@ if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
         SDL3_image::SDL3_image
         SDL3_ttf::SDL3_ttf
         CURL::libcurl
-        cJSON::cJSON
+        cjson
         SDL3_sound::SDL3_sound
         CARA::CARA
     )
