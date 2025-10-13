@@ -108,9 +108,11 @@ jobs:
           
         # Staple the notarization ticket
         xcrun stapler staple -v "$OUT_DMG"
-        
-        # Verify the final package
-        spctl -a -vv "$OUT_DMG"
+
+        # Validate stapling and Gatekeeper assessment for the DMG
+        xcrun stapler validate "$OUT_DMG"
+        spctl --assess -vv --type open "$OUT_DMG"
+
 
     - name: Rename package
       run: |
