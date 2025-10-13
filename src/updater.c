@@ -215,15 +215,17 @@ static void run_updater_script(const char* script_path) {
 #ifdef _WIN32
     char command[1024];
     snprintf(command, sizeof(command), "powershell.exe -ExecutionPolicy Bypass -File \"%s\"", script_path);
-    // Using system() for simplicity, but CreateProcess would be more robust
     system(command);
 #else
     char command[1024];
-    snprintf(command, sizeof(command), "chmod +x \"%s\" && \"%s\"", script_path, script_path);
+    snprintf(command, sizeof(command), "chmod +x \"%s\" && \"%s\" &", script_path, script_path);
     system(command);
 #endif
-    SDL_Quit();
-    exit(0);
+
+    SDL_Event event;
+    SDL_zero(event);
+    event.type = SDL_EVENT_QUIT;
+    SDL_PushEvent(&event);
 }
 
 static void on_update_download_complete(const char* downloaded_path, bool success, void* userdata) {
@@ -275,10 +277,24 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
 
             snprintf(script_content, sizeof(script_content),
                 "#!/bin/bash\n"
-                "sleep 2\n"
+                "set -e\n"
+                "sleep 1\n"
+                "echo \"Waiting for application to close...\"\n"
+                "for i in {1..10}; do\n"
+                "    if ! pgrep -x \"automarker-c\" > /dev/null; then\n"
+                "        echo \"Application closed gracefully.\"\n"
+                "        break\n"
+                "    fi\n"
+                "    if [ $i -eq 10 ]; then\n"
+                "        echo \"Application did not close, forcing quit.\"\n"
+                "        pkill -f \"automarker-c\"\n"
+                "        sleep 1\n"
+                "    fi\n"
+                "    sleep 1\n"
+                "done\n"
                 "hdiutil attach \"%s\" -mountpoint /Volumes/AutoMarkerUpdate\n"
-                "rsync -a --delete /Volumes/AutoMarkerUpdate/automarker-c.app/ \"%s/\"\n"
-                "hdiutil detach /Volumes/AutoMarkerUpdate\n"
+                "osascript -e 'do shell script \"rsync -a --delete /Volumes/AutoMarkerUpdate/automarker-c.app/ \\\"%s/\\\"\" with administrator privileges'\n"
+                "hdiutil detach /Volumes/AutoMarkerUpdate || true\n"
                 "open \"%s\"\n"
                 "rm \"%s\"\n"
                 "rm -- \"$0\"\n",
