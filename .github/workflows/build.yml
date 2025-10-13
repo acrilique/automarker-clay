@@ -61,13 +61,13 @@ jobs:
         security unlock-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
         
         # Decode and import the certificate
-        echo $MAC_CERT_P12_BASE64 | base64 --decode > $RUNNER_TEMP/certificate.p12
+        printf "%s" "$MAC_CERT_P12_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
         security import $RUNNER_TEMP/certificate.p12 -k $KEYCHAIN_PATH -P $MAC_CERT_PASSWORD -T /usr/bin/codesign
         security set-key-partition-list -S apple-tool:,apple: -s -k "temporary_keychain_password" $KEYCHAIN_PATH
         
         # Decode and save the App Store Connect API key
         mkdir -p $RUNNER_TEMP/private_keys
-        echo $API_KEY_P8_BASE64 | base64 --decode > $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8
+        printf "%s" "$API_KEY_P8_BASE64" | base64 --decode > $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8
         
         # Sign the application bundle
         codesign --force --deep --options runtime --timestamp \
