@@ -31,32 +31,25 @@ jobs:
     - name: Configure CMake
       run: >
         cmake -B build
+        -G Xcode
         -DCMAKE_BUILD_TYPE=Release
-        -DMACOS_BUNDLE=ON
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-        -DCMAKE_PREFIX_PATH="$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas);$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp);$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libpng)"
-        -DCMAKE_C_FLAGS="-I$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix openblas)/include"
-        -DCMAKE_EXE_LINKER_FLAGS="-L$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix)/lib"
-        -DOpenMP_C_FLAGS="-Xpreprocessor -fopenmp -I$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)/include"
-        -DOpenMP_C_LIB_NAMES="omp"
-        -DOpenMP_omp_LIBRARY=$(${{ matrix.arch == 'arm64' && 'brew' || 'arch -x86_64 /usr/local/bin/brew' }} --prefix libomp)/lib/libomp.dylib
-
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Sign and Notarize
+    - name: Archive, Sign, and Notarize
       if: success()
       env:
         MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
         MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-        API_KEY_P8_BASE64: ${{ secrets.API_KEY_P8_BASE64 }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         API_KEY_ID: ${{ secrets.API_KEY_ID }}
         API_ISSUER_ID: ${{ secrets.API_ISSUER_ID }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        API_KEY_P8_BASE64: ${{ secrets.API_KEY_P8_BASE64 }}
       run: |
         set -euo pipefail
 
-        # Create a temporary keychain
+        # ------ Keychain Setup ------
         KEYCHAIN_PATH=$RUNNER_TEMP/app.keychain
         security create-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
         security list-keychains -s $KEYCHAIN_PATH
@@ -67,70 +60,41 @@ jobs:
         security import $RUNNER_TEMP/certificate.p12 -k $KEYCHAIN_PATH -P $MAC_CERT_PASSWORD -T /usr/bin/codesign
         security set-key-partition-list -S apple-tool:,apple: -s -k "temporary_keychain_password" $KEYCHAIN_PATH
         
-        # Decode and save the App Store Connect API key
-        mkdir -p $RUNNER_TEMP/private_keys
-        printf "%s" "$API_KEY_P8_BASE64" | base64 --decode > $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8
+        # ------ API Key Setup ------
+        mkdir -p $RUNNER_TEMP/.private_keys
+        printf "%s" "$API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/.private_keys/AuthKey_${API_KEY_ID}.p8"
         
-        # Package to create CPack staging (this may modify binaries with install_name_tool)
-        (cd build && cpack)
+        # Store credentials for notarytool
+        xcrun notarytool store-credentials "AUTOMARKER-CI" \
+          --api-issuer "$API_ISSUER_ID" \
+          --api-key-id "$API_KEY_ID" \
+          --api-key "$RUNNER_TEMP/.private_keys/AuthKey_${API_KEY_ID}.p8"
 
-        # Find the staged app inside CPack's staging area (after any fixups)
-        STAGED_APP=$(find build/_CPack_Packages -type d -path "*/ALL_IN_ONE/*.app" -name "automarker-c.app" -print -quit)
-        if [[ -z "${STAGED_APP:-}" ]]; then
-          echo "Staged app not found"; exit 1
+        # ------ Archive the app ------
+        xcodebuild archive \
+          -project build/automarker-c.xcodeproj \
+          -scheme automarker-c \
+          -archivePath build/automarker-c.xcarchive \
+          -destination "generic/platform=macOS,arch=${{ matrix.arch }}" \
+          CODE_SIGN_IDENTITY="Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
+          CODE_SIGN_STYLE=Manual \
+          ENABLE_HARDENED_RUNTIME=YES \
+          OTHER_CODE_SIGN_FLAGS="--timestamp"
+
+        # ------ Export and notarize ------
+        xcodebuild -exportArchive \
+          -archivePath build/automarker-c.xcarchive \
+          -exportPath build/export \
+          -exportOptionsPlist exportOptions.plist \
+          -allowProvisioningUpdates
+
+        # ------ Find and rename the DMG ------
+        FINAL_DMG=$(find build/export -name "*.dmg" -print -quit)
+        if [[ -z "${FINAL_DMG}" ]]; then
+          echo "Error: No DMG found in export directory"
+          exit 1
         fi
-
-        # Re-sign the staged .app to ensure signature matches final contents
-        codesign --force --deep --options runtime --timestamp \
-          --entitlements automarker-c.entitlements \
-          --sign "Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
-          "$STAGED_APP"
-
-        # Verify the app signature
-        codesign --verify --deep --strict --verbose=2 "$STAGED_APP"
-
-        # Create a fresh DMG from the signed staging folder
-        STAGING_DIR="$(dirname "$STAGED_APP")"
-        OUT_DMG="build/automarker-c-macos-${{ matrix.arch }}.dmg"
-        hdiutil create -volname "automarker-c" -srcfolder "$STAGING_DIR" -ov -format UDZO "$OUT_DMG"
-
-        # Sign the DMG
-        codesign --force --options runtime --timestamp \
-          --sign "Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
-          "$OUT_DMG"
-          
-        # Notarize the DMG
-        xcrun notarytool submit "$OUT_DMG" \
-          --key $RUNNER_TEMP/private_keys/AuthKey_${API_KEY_ID}.p8 \
-          --key-id ${API_KEY_ID} \
-          --issuer ${API_ISSUER_ID} \
-          --wait
-          
-        # Staple the notarization ticket
-        xcrun stapler staple -v "$OUT_DMG"
-
-        # Validate stapling
-        xcrun stapler validate "$OUT_DMG"
-
-        # Mount DMG and assess the contained app with Gatekeeper
-        MOUNT_POINT="$RUNNER_TEMP/mnt"
-        mkdir -p "$MOUNT_POINT"
-        hdiutil attach "$OUT_DMG" -nobrowse -mountpoint "$MOUNT_POINT" -quiet
-        APP_IN_DMG=$(find "$MOUNT_POINT" -maxdepth 1 -name "automarker-c.app" -print -quit)
-        if [[ -z "${APP_IN_DMG:-}" ]]; then
-          echo "App not found inside DMG"; hdiutil detach "$MOUNT_POINT" -quiet; exit 1
-        fi
-        spctl --assess -vv --type execute "$APP_IN_DMG"
-        hdiutil detach "$MOUNT_POINT" -quiet
-
-
-    - name: Rename package
-      run: |
-        DMG_PATH=$(find build -name "*.dmg" -print -quit)
-        TARGET="build/automarker-c-macos-${{ matrix.arch }}.dmg"
-        if [ "$DMG_PATH" != "$TARGET" ]; then
-          mv "$DMG_PATH" "$TARGET"
-        fi
+        mv "$FINAL_DMG" "build/automarker-c-macos-${{ matrix.arch }}.dmg"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

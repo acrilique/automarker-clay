@@ -39,7 +39,7 @@ void install_cep_extension(const char *base_path) {
     snprintf(installer_path, sizeof(installer_path), "%sresources\\installers\\extension_installer_win.bat", base_path);
     snprintf(command, sizeof(command), "cmd.exe /c \"%s\"", installer_path);
 #else
-#ifdef MACOS_BUNDLE
+#ifdef __APPLE__
     snprintf(installer_path, sizeof(installer_path), "%s%s", base_path, "extension_installer_mac.sh");
 #else
     snprintf(installer_path, sizeof(installer_path), "%sresources/installers/extension_installer_mac.sh", base_path);

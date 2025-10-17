@@ -4,8 +4,6 @@ cmake_minimum_required(VERSION 3.27)
 project(automarker-c VERSION 0.2.2 LANGUAGES C)
 set(CMAKE_C_STANDARD 99)
 
-option(MACOS_BUNDLE "Create a macOS bundle structure" OFF)
-
 # debug flags
 if(NOT MSVC)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -Wall -Wextra -g")
@@ -20,6 +18,40 @@ if(MSVC)
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2 /fp:fast /arch:AVX2")
 else()
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+endif()
+
+if(APPLE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
+  set(CMAKE_OSX_ARCHITECTURES "arm64")
+
+  find_program(HOMEBREW_EXECUTABLE brew)
+  if(NOT HOMEBREW_EXECUTABLE)
+    message(WARNING "Homebrew (brew) not found. Dependencies may fail to link.")
+  else()
+    # Helper function to get a brew package prefix
+    function(get_brew_prefix package var)
+      execute_process(
+        COMMAND ${HOMEBREW_EXECUTABLE} --prefix ${package}
+        OUTPUT_VARIABLE BREW_PATH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+      set(${var} ${BREW_PATH} PARENT_SCOPE)
+    endfunction()
+
+    get_brew_prefix(openblas OPENBLAS_PREFIX)
+    get_brew_prefix(libomp   LIBOMP_PREFIX)
+    get_brew_prefix(libpng   LIBPNG_PREFIX)
+
+    # Add brew paths for find_* commands and compilation
+    list(APPEND CMAKE_PREFIX_PATH "${OPENBLAS_PREFIX}" "${LIBOMP_PREFIX}" "${LIBPNG_PREFIX}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${OPENBLAS_PREFIX}/include")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -L${OPENBLAS_PREFIX}/lib")
+
+    # Configure OpenMP from brew
+    set(OpenMP_C_FLAGS "-Xpreprocessor -fopenmp -I${LIBOMP_PREFIX}/include")
+    set(OpenMP_C_LIB_NAMES "omp")
+    set(OpenMP_omp_LIBRARY "${LIBOMP_PREFIX}/lib/libomp.dylib")
+  endif()
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
@@ -48,7 +80,7 @@ if(EXISTS "/usr/include/openblas")
     include_directories("/usr/include/openblas")
 endif()
 
-if(MACOS_BUNDLE)
+if(APPLE)
     add_executable(${PROJECT_NAME} MACOSX_BUNDLE
         src/main.c
         src/updater.c
@@ -74,9 +106,7 @@ endif()
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${PROJECT_VERSION}")
 
-if(MACOS_BUNDLE)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE MACOS_BUNDLE)
-
+if(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE TRUE
         INSTALL_RPATH "@executable_path/../Frameworks;@loader_path/../Frameworks"
@@ -89,48 +119,13 @@ if(MACOS_BUNDLE)
     install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION .)
     install(TARGETS SDL3_sound LIBRARY DESTINATION lib_temp)
 
-    install(CODE "
-      include(BundleUtilities)
-      set(bundle \"$<INSTALL_PREFIX>/${PROJECT_NAME}.app\")
-      set(search_dirs
-        \"$<INSTALL_PREFIX>/lib_temp\"
-        \"/opt/homebrew/lib\"
-        \"/usr/local/lib\"
-      )
-      file(GLOB GCC_LIB_DIR \"/opt/homebrew/lib/gcc/*\")
-      if(GCC_LIB_DIR)
-        list(APPEND search_dirs \${GCC_LIB_DIR})
-      endif()
-      file(GLOB GCC_LIB_DIR_LOCAL \"/usr/local/lib/gcc/*\")
-      if(GCC_LIB_DIR_LOCAL)
-        list(APPEND search_dirs \${GCC_LIB_DIR_LOCAL})
-      endif()
-      fixup_bundle(
-        \"\${bundle}\" \"\" \"\${search_dirs}\"
-        IGNORE_ITEM
-          \"/System/Library/.*\"
-          \"/usr/lib/.*\"
-          \".*libSystem.*\"
-          \".*libobjc.*\"
-          \".*AppKit.framework/.*\"
-          \".*Foundation.framework/.*\"
-      )
-      file(REMOVE_RECURSE \"$<INSTALL_PREFIX>/lib_temp\")
-    ")
-
     set(CPACK_GENERATOR "DragNDrop")
     include(CPack)
 else()
     # Set rpath for the executable to find the shared libraries at runtime
-    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-        set(RPATH_VALUE "@executable_path")
-    else()
-        set(RPATH_VALUE "$ORIGIN")
-    endif()
-
     set_target_properties(${PROJECT_NAME} PROPERTIES
         BUILD_WITH_INSTALL_RPATH TRUE
-        INSTALL_RPATH "${RPATH_VALUE}"
+        INSTALL_RPATH "$ORIGIN"
     )
 endif()
 
@@ -180,8 +175,13 @@ else()
     )
 endif()
 
-if(MACOS_BUNDLE)
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/resources/ DESTINATION ${PROJECT_NAME}.app/Contents/Resources)
+if(APPLE)
+    # Add resources to the bundle using native CMake approach
+    file(GLOB_RECURSE BUNDLE_RESOURCES "resources/*")
+    target_sources(${PROJECT_NAME} PRIVATE ${BUNDLE_RESOURCES})
+    set_source_files_properties(${BUNDLE_RESOURCES} PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources
+    )
 else()
     add_custom_command(
         TARGET ${PROJECT_NAME} POST_BUILD
