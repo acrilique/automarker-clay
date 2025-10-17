@@ -341,13 +341,19 @@ void audio_state_load_file(AudioState *state, const char *file_path) {
 
     // Stop playback and clean up any existing audio stream/device
     audio_state_stop_playback(state);
+    
+    // Proper cleanup sequence to avoid AudioQueue errors
+    if (state->audio_device) {
+        SDL_PauseAudioDevice(state->audio_device);
+        if (state->audio_stream) {
+            SDL_UnbindAudioStream(state->audio_stream);
+        }
+        SDL_CloseAudioDevice(state->audio_device);
+        state->audio_device = 0;
+    }
     if (state->audio_stream) {
         SDL_DestroyAudioStream(state->audio_stream);
         state->audio_stream = NULL;
-    }
-    if (state->audio_device) {
-        SDL_CloseAudioDevice(state->audio_device);
-        state->audio_device = 0;
     }
     
     // Wait for any existing processing to finish before loading a new file
@@ -444,14 +450,20 @@ void audio_state_destroy(AudioState *state) {
     // Stop any ongoing playback
     audio_state_stop_playback(state);
 
-    // Clean up streaming resources
+    // Clean up streaming resources with proper ordering to avoid AudioQueue errors
+    if (state->audio_device) {
+        SDL_PauseAudioDevice(state->audio_device);
+        
+        if (state->audio_stream) {
+            SDL_UnbindAudioStream(state->audio_stream);
+        }        
+        SDL_CloseAudioDevice(state->audio_device);
+        state->audio_device = 0;
+    }
+    
     if (state->audio_stream) {
         SDL_DestroyAudioStream(state->audio_stream);
         state->audio_stream = NULL;
-    }
-    if (state->audio_device) {
-        SDL_CloseAudioDevice(state->audio_device);
-        state->audio_device = 0;
     }
     
     // Ensure processing thread is finished
@@ -511,6 +523,11 @@ void audio_state_stop_playback(AudioState *state) {
     
     if (state->audio_device) {
         SDL_PauseAudioDevice(state->audio_device);
+    }
+    
+    // Clear any queued audio data to prevent issues during cleanup
+    if (state->audio_stream) {
+        SDL_ClearAudioStream(state->audio_stream);
     }
     
     state->playback_state = PLAYBACK_STOPPED;
