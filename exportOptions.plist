@@ -2,14 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>destination</key>
+    <string>export</string>
     <key>method</key>
     <string>developer-id</string>
-    <key>teamID</key>
-    <string>BJPC4PHT7X</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.acrilique.automarker</key>
+        <string>match Development com.acrilique.automarker</string>
+    </dict>
     <key>signingStyle</key>
     <string>manual</string>
     <key>signingCertificate</key>
     <string>Developer ID Application: Lluc Simó Margalef (BJPC4PHT7X)</string>
+    <key>teamID</key>
+    <string>BJPC4PHT7X</string>
     <key>uploadSymbols</key>
     <true/>
 </dict>

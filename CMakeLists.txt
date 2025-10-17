@@ -109,6 +109,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE APP_VERSION="${PROJECT_VERSIO
 if(APPLE)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         MACOSX_BUNDLE_IDENTIFIER "com.acrilique.automarker"
+        MACOSX_BUNDLE_INFO_PLIST "<string>LSApplicationCategoryType</string><string>public.app-category.utilities</string>"
     )
 
     set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks;@loader_path/../Frameworks")
