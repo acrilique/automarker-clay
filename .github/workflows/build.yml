@@ -42,12 +42,19 @@ jobs:
       env:
         MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
         MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        MAC_PROVISIONING_PROFILE: ${{ secrets.MAC_PROVISIONING_PROFILE }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         API_KEY_ID: ${{ secrets.API_KEY_ID }}
         API_ISSUER_ID: ${{ secrets.API_ISSUER_ID }}
         API_KEY_P8_BASE64: ${{ secrets.API_KEY_P8_BASE64 }}
       run: |
         set -euo pipefail
+
+        # ------ Provisioning Profile Setup ------
+        PP_PATH="$RUNNER_TEMP/build_pp.provisionprofile"
+        printf "%s" "$MAC_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
+        mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+        cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
         # ------ Keychain Setup ------
         KEYCHAIN_PATH=$RUNNER_TEMP/app.keychain
