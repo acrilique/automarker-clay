@@ -66,9 +66,9 @@ jobs:
         
         # Store credentials for notarytool
         xcrun notarytool store-credentials "AUTOMARKER-CI" \
-          --api-issuer "$API_ISSUER_ID" \
-          --api-key-id "$API_KEY_ID" \
-          --api-key "$RUNNER_TEMP/.private_keys/AuthKey_${API_KEY_ID}.p8"
+          --issuer "$API_ISSUER_ID" \
+          --key-id "$API_KEY_ID" \
+          --key "$RUNNER_TEMP/.private_keys/AuthKey_${API_KEY_ID}.p8"
 
         # ------ Archive the app ------
         xcodebuild archive \
