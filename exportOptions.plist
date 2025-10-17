@@ -6,11 +6,6 @@
     <string>export</string>
     <key>method</key>
     <string>developer-id</string>
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>com.acrilique.automarker</key>
-        <string>match Development com.acrilique.automarker</string>
-    </dict>
     <key>signingStyle</key>
     <string>manual</string>
     <key>signingCertificate</key>
