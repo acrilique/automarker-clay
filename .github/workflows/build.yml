@@ -75,7 +75,7 @@ jobs:
           -project build/automarker-c.xcodeproj \
           -scheme automarker-c \
           -archivePath build/automarker-c.xcarchive \
-          -destination "generic/platform=macOS,arch=${{ matrix.arch }}" \
+          -destination "platform=macOS,name=Any Mac" \
           CODE_SIGN_IDENTITY="Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
           CODE_SIGN_STYLE=Manual \
           ENABLE_HARDENED_RUNTIME=YES \
