@@ -141,7 +141,7 @@ jobs:
       with:
         name: automarker-c-macos-${{ matrix.arch }}
         path: build/automarker-c-macos-${{ matrix.arch }}.zip
-        compression-level: 0
+        compression-level: 1
 
   build-windows:
     runs-on: windows-latest
