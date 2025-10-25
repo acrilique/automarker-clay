@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.27)
 # Set a local install prefix to avoid permission issues
 set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "Install path" FORCE)
 
-project(automarker-c VERSION 0.2.2 LANGUAGES C)
+project(automarker-c VERSION 0.2.3 LANGUAGES C)
 set(CMAKE_C_STANDARD 99)
 
 set(SDLSOUND_BUILD_TEST OFF CACHE BOOL "" FORCE)
