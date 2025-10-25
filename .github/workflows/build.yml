@@ -129,6 +129,15 @@ jobs:
         xcrun stapler staple "$APP_BUNDLE_PATH"
         echo "Stapling complete."
 
+        echo "--- Verifying Signature and Notarization ---"
+        echo "1/2: Verifying code signature..."
+        codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE_PATH"
+        echo "Signature verification successful."
+        
+        echo "2/2: Verifying notarization ticket..."
+        xcrun stapler validate -v "$APP_BUNDLE_PATH"
+        echo "Notarization verification successful."
+
     - name: Compress app bundle
       run: |
         ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE_PATH" "${{ github.workspace }}/build/automarker-c-macos-${{ matrix.arch }}.zip"
