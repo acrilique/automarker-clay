@@ -74,8 +74,31 @@ jobs:
           -archivePath build/automarker-c.xcarchive \
           -configuration Release
 
-        # ------ Run fixup script (we need to pass absolute path to the archive) ------
-        ./cmake/run_fixup.sh
+        # ------ Run fixup script ------
+        echo "--- Starting Manual Bundle Fixup ---"
+        ARCHIVE_PATH="build/automarker-c.xcarchive"
+        REAL_ARCHIVE_PATH="$(pwd)/$ARCHIVE_PATH"
+        APP_BUNDLE_PATH="${REAL_ARCHIVE_PATH}/Products/Applications/automarker-c.app"
+        EXECUTABLE_PATH="${APP_BUNDLE_PATH}/Contents/MacOS/automarker-c"
+        BINARY_DIR="$(pwd)/build"
+        LIBRARY_SEARCH_PATHS="${REAL_ARCHIVE_PATH}/Products/Applications"
+
+        echo "  Archive Path: ${REAL_ARCHIVE_PATH}"
+        echo "  App Bundle:   ${APP_BUNDLE_PATH}"
+        echo "  Libs Path:    ${LIBRARY_SEARCH_PATHS}"
+        echo "  Binary Dir:   ${BINARY_DIR}"
+
+        cat << EOF > "${BINARY_DIR}/temp_manual_fixup.cmake"
+        include(BundleUtilities)
+        fixup_bundle(
+          "${EXECUTABLE_PATH}"
+          ""
+          "${LIBRARY_SEARCH_PATHS}"
+        )
+        EOF
+
+        cmake -P "${BINARY_DIR}/temp_manual_fixup.cmake"
+        echo "--- Bundle fixup script finished successfully! ---"
 
         APP_BUNDLE_PATH="build/automarker-c.xcarchive/Products/Applications/automarker-c.app"
         echo "APP_BUNDLE_PATH=${APP_BUNDLE_PATH}" >> $GITHUB_ENV
@@ -212,8 +235,31 @@ jobs:
           -archivePath build/automarker-c.xcarchive \
           -configuration Release
 
-        # ------ Run fixup script (we need to pass absolute path to the archive) ------
-        ./cmake/run_fixup.sh
+        # ------ Run fixup script ------
+        echo "--- Starting Manual Bundle Fixup ---"
+        ARCHIVE_PATH="build/automarker-c.xcarchive"
+        REAL_ARCHIVE_PATH="$(pwd)/$ARCHIVE_PATH"
+        APP_BUNDLE_PATH="${REAL_ARCHIVE_PATH}/Products/Applications/automarker-c.app"
+        EXECUTABLE_PATH="${APP_BUNDLE_PATH}/Contents/MacOS/automarker-c"
+        BINARY_DIR="$(pwd)/build"
+        LIBRARY_SEARCH_PATHS="${REAL_ARCHIVE_PATH}/Products/Applications"
+
+        echo "  Archive Path: ${REAL_ARCHIVE_PATH}"
+        echo "  App Bundle:   ${APP_BUNDLE_PATH}"
+        echo "  Libs Path:    ${LIBRARY_SEARCH_PATHS}"
+        echo "  Binary Dir:   ${BINARY_DIR}"
+
+        cat << EOF > "${BINARY_DIR}/temp_manual_fixup.cmake"
+        include(BundleUtilities)
+        fixup_bundle(
+          "${EXECUTABLE_PATH}"
+          ""
+          "${LIBRARY_SEARCH_PATHS}"
+        )
+        EOF
+
+        cmake -P "${BINARY_DIR}/temp_manual_fixup.cmake"
+        echo "--- Bundle fixup script finished successfully! ---"
 
         APP_BUNDLE_PATH="build/automarker-c.xcarchive/Products/Applications/automarker-c.app"
         echo "APP_BUNDLE_PATH=${APP_BUNDLE_PATH}" >> $GITHUB_ENV
