@@ -129,9 +129,12 @@ jobs:
         xcrun stapler staple "$APP_BUNDLE_PATH"
         echo "Stapling complete."
 
+    - name: Create build directory for artifact
+      run: mkdir -p build
+
     - name: Compress app bundle
       run: |
-        (cd "$(dirname "$APP_BUNDLE_PATH")" && zip -r "${RUNNER_WORKSPACE}/build/automarker-c-macos-${{ matrix.arch }}.zip" "$(basename "$APP_BUNDLE_PATH")")
+        (cd "$(dirname "$APP_BUNDLE_PATH")" && zip -r "${{ github.workspace }}/build/automarker-c-macos-${{ matrix.arch }}.zip" "$(basename "$APP_BUNDLE_PATH")")
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
