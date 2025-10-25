@@ -143,7 +143,7 @@ jobs:
         echo "Signature verification successful."
         
         echo "2/2: Verifying DMG notarization..."
-        spctl -a -v "$DMG_PATH"
+        xcrun stapler validate -v "$DMG_PATH"
         echo "Notarization verification successful."
 
     - name: Upload artifact
