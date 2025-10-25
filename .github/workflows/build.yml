@@ -108,15 +108,23 @@ jobs:
         codesign --deep --force --options runtime --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "$APP_BUNDLE_PATH"
         echo "Signing complete."
 
-        # 2. Create a ZIP archive for the notarization service
-        echo "2/4: Creating ZIP archive for notarization..."
-        ditto -c -k --rsrc --sequesterRsrc "$APP_BUNDLE_PATH" "$ZIP_PATH"
-        echo "ZIP archive created at ${ZIP_PATH}"
+        # 2. Create and sign the distributable DMG
+        DMG_PATH="build/automarker-c-macos-${{ matrix.arch }}.dmg"
+        echo "2/4: Creating and signing DMG at ${DMG_PATH}..."
+        
+        APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
+        VOLUME_NAME="${APP_NAME}"
+        
+        hdiutil create -ov -volname "$VOLUME_NAME" -fs HFS+ -srcfolder "$APP_BUNDLE_PATH" -format UDRW "build/rw.temp.dmg"
+        hdiutil convert "build/rw.temp.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
+        rm "build/rw.temp.dmg"
+        
+        codesign --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "$DMG_PATH"
+        echo "DMG created and signed."
 
-        # 3. Submit for notarization
-        echo "3/4: Submitting for notarization with notarytool..."
-        echo "(This may take several minutes. You can check the status in your email.)"
-        xcrun notarytool submit "$ZIP_PATH" \
+        # 3. Submit the DMG for notarization
+        echo "3/4: Submitting DMG for notarization with notarytool..."
+        xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$APPLE_ID" \
             --password "$APP_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
@@ -124,46 +132,19 @@ jobs:
 
         echo "Notarization successful!"
 
-        # 4. Staple the notarization ticket to the app bundle
-        echo "4/4: Stapling notarization ticket to the app bundle..."
-        xcrun stapler staple "$APP_BUNDLE_PATH"
+        # 4. Staple the notarization ticket to the DMG
+        echo "4/4: Stapling notarization ticket to the DMG..."
+        xcrun stapler staple "$DMG_PATH"
         echo "Stapling complete."
 
-        echo "--- Verifying Signature and Notarization ---"
-        echo "1/2: Verifying code signature..."
-        codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE_PATH"
+        echo "--- Verifying Final DMG ---"
+        echo "1/2: Verifying DMG code signature..."
+        codesign --verify --verbose=2 "$DMG_PATH"
         echo "Signature verification successful."
         
-        echo "2/2: Verifying notarization ticket..."
-        xcrun stapler validate -v "$APP_BUNDLE_PATH"
+        echo "2/2: Verifying DMG notarization..."
+        spctl -a -v "$DMG_PATH"
         echo "Notarization verification successful."
-
-    - name: Package as DMG
-      env:
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      run: |
-        set -eu
-        
-        APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
-        DMG_NAME="${APP_NAME}-macos-${{ matrix.arch }}.dmg"
-        VOLUME_NAME="${APP_NAME}"
-        
-        echo "--- Creating DMG ---"
-        
-        # 1. Create a temporary read-write DMG
-        hdiutil create -ov -volname "$VOLUME_NAME" -fs HFS+ -srcfolder "$APP_BUNDLE_PATH" -format UDRW "build/rw.${DMG_NAME}"
-        
-        # 2. Convert to a compressed read-only DMG
-        hdiutil convert "build/rw.${DMG_NAME}" -format UDZO -imagekey zlib-level=9 -o "build/${DMG_NAME}"
-        
-        # 3. Clean up the temporary DMG
-        rm "build/rw.${DMG_NAME}"
-        
-        # 4. Sign the final DMG
-        echo "--- Signing DMG ---"
-        codesign --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "build/${DMG_NAME}"
-
-        echo "DMG created and signed at build/${DMG_NAME}"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
