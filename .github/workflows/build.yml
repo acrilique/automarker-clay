@@ -179,6 +179,7 @@ jobs:
       run: >
         cmake -B build -A x64
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        -DVCPKG_TARGET_TRIPLET=x64-windows-release
         -DVCPKG_BUILD_TYPE=release
 
     - name: Build
