@@ -339,16 +339,17 @@ jobs:
     - name: Set up vcpkg
       uses: lukka/run-vcpkg@v11
 
+    - name: Set up environment for pkg-config
+      run: |
+        echo "${{ env.VCPKG_ROOT }}\\installed\\x64-windows-release\\tools\\pkgconf" >> $env:GITHUB_PATH
+        echo "PKG_CONFIG_PATH=${{ env.VCPKG_ROOT }}\\installed\\x64-windows-release\\lib\\pkgconfig" >> $env:GITHUB_ENV
+
     - name: Configure CMake
       run: >
         cmake -B build -A x64
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -DVCPKG_TARGET_TRIPLET=x64-windows-release
         -DVCPKG_BUILD_TYPE=release
-      env:
-        VCPKG_ROOT: ${{ env.VCPKG_ROOT }}
-        PATH: ${{ env.VCPKG_ROOT }}\\installed\\x64-windows-release\\tools\\pkgconf;${{ env.PATH }}
-        PKG_CONFIG_PATH: ${{ env.VCPKG_ROOT }}\\installed\\x64-windows-release\\lib\\pkgconfig
 
     - name: Build
       run: cmake --build build --config Release
