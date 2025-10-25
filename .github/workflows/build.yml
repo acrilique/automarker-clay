@@ -139,6 +139,8 @@ jobs:
         echo "Notarization verification successful."
 
     - name: Package as DMG
+      env:
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       run: |
         set -eu
         
