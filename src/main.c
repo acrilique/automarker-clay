@@ -1022,6 +1022,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
             audio_state->selection_start = clicked_sample;
             audio_state->selection_end = state->selection_drag_start;
           }
+          // Ensure the selection is never zero-width.
+          if (audio_state->selection_start == audio_state->selection_end) {
+              audio_state->selection_end++;
+          }
           break;
         default:
           break;
