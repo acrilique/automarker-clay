@@ -131,7 +131,7 @@ jobs:
 
     - name: Compress app bundle
       run: |
-        ditto -c -k --rsrc --sequesterRsrc "$APP_BUNDLE_PATH" "${{ github.workspace }}/build/automarker-c-macos-${{ matrix.arch }}.zip"
+        ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE_PATH" "${{ github.workspace }}/build/automarker-c-macos-${{ matrix.arch }}.zip"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
