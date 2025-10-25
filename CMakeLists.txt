@@ -31,14 +31,21 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 
 
 # --- Find Packages ---
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SDL3 REQUIRED sdl3)
-pkg_check_modules(SDL3_image REQUIRED sdl3-image)
-pkg_check_modules(SDL3_ttf REQUIRED sdl3-ttf)
-pkg_check_modules(CURL REQUIRED libcurl)
+if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
+    find_package(SDL3 CONFIG REQUIRED)
+    find_package(SDL3_image CONFIG REQUIRED)
+    find_package(SDL3_ttf CONFIG REQUIRED)
+    find_package(CURL CONFIG REQUIRED)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL3 REQUIRED sdl3)
+    pkg_check_modules(SDL3_image REQUIRED sdl3-image)
+    pkg_check_modules(SDL3_ttf REQUIRED sdl3-ttf)
+    pkg_check_modules(CURL REQUIRED libcurl)
 
-# Add library directories for pkg-config libraries
-link_directories(${SDL3_LIBRARY_DIRS} ${SDL3_image_LIBRARY_DIRS} ${SDL3_ttf_LIBRARY_DIRS} ${CURL_LIBRARY_DIRS})
+    # Add library directories for pkg-config libraries
+    link_directories(${SDL3_LIBRARY_DIRS} ${SDL3_image_LIBRARY_DIRS} ${SDL3_ttf_LIBRARY_DIRS} ${CURL_LIBRARY_DIRS})
+endif()
 
 if(APPLE)
   find_library(ACCELERATE_FRAMEWORK Accelerate REQUIRED)
@@ -99,10 +106,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # --- Linking Libraries to Main Executable ---
 # Link against the official targets provided by find_package and the subprojects.
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    ${SDL3_LIBRARIES}
-    ${SDL3_image_LIBRARIES}
-    ${SDL3_ttf_LIBRARIES}
-    curl
+    SDL3::SDL3
+    SDL3_image::SDL3_image
+    SDL3_ttf::SDL3_ttf
+    CURL::libcurl
     cjson
     SDL3_sound::SDL3_sound
     CARA::CARA

@@ -338,11 +338,8 @@ jobs:
 
     - name: Set up vcpkg
       uses: lukka/run-vcpkg@v11
-
-    - name: Set up environment for pkg-config
-      run: |
-        echo "${{ env.VCPKG_ROOT }}\\installed\\x64-windows-release\\tools\\pkgconf" >> $env:GITHUB_PATH
-        echo "PKG_CONFIG_PATH=${{ env.VCPKG_ROOT }}\\installed\\x64-windows-release\\lib\\pkgconfig" >> $env:GITHUB_ENV
+      with:
+        vcpkgJsonGlob: 'vcpkg.json'
 
     - name: Configure CMake
       run: >
