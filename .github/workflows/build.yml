@@ -138,16 +138,37 @@ jobs:
         xcrun stapler validate -v "$APP_BUNDLE_PATH"
         echo "Notarization verification successful."
 
-    - name: Compress app bundle
+    - name: Package as DMG
       run: |
-        ditto -c -k --sequesterRsrc --keepParent "$APP_BUNDLE_PATH" "${{ github.workspace }}/build/automarker-c-macos-${{ matrix.arch }}.zip"
+        set -eu
+        
+        APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
+        DMG_NAME="${APP_NAME}-macos-${{ matrix.arch }}.dmg"
+        VOLUME_NAME="${APP_NAME}"
+        
+        echo "--- Creating DMG ---"
+        
+        # 1. Create a temporary read-write DMG
+        hdiutil create -ov -volname "$VOLUME_NAME" -fs HFS+ -srcfolder "$APP_BUNDLE_PATH" -format UDRW "build/rw.${DMG_NAME}"
+        
+        # 2. Convert to a compressed read-only DMG
+        hdiutil convert "build/rw.${DMG_NAME}" -format UDZO -imagekey zlib-level=9 -o "build/${DMG_NAME}"
+        
+        # 3. Clean up the temporary DMG
+        rm "build/rw.${DMG_NAME}"
+        
+        # 4. Sign the final DMG
+        echo "--- Signing DMG ---"
+        codesign --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "build/${DMG_NAME}"
+
+        echo "DMG created and signed at build/${DMG_NAME}"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: automarker-c-macos-${{ matrix.arch }}
-        path: build/automarker-c-macos-${{ matrix.arch }}.zip
-        compression-level: 1
+        path: build/automarker-c-macos-${{ matrix.arch }}.dmg
+        compression-level: 0
 
   build-windows:
     runs-on: windows-latest
