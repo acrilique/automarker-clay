@@ -78,9 +78,9 @@ static void update_check_callback(const char *response, bool success, void *user
         if (cJSON_IsArray(assets_array)) {
             const char* platform_str =
 #if defined(__APPLE__) && defined(__aarch64__)
-                "macos-arm64.zip";
+                "macos-arm64.dmg";
 #elif defined(__APPLE__)
-                "macos-x86_64.zip";
+                "macos-x86_64.dmg";
 #elif defined(_WIN32)
                 "windows-x64.zip";
 #else
@@ -292,11 +292,20 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
                 "    fi\n"
                 "    sleep 1\n"
                 "done\n"
-                "UPDATE_DIR=$(mktemp -d)\n"
-                "unzip -o \"%s\" -d \"$UPDATE_DIR\"\n"
-                "osascript -e 'do shell script \"rsync -a --delete \\\"$UPDATE_DIR/automarker-c.app/\\\" \\\"%s/\\\"\" with administrator privileges'\n"
-                "rm -rf \"$UPDATE_DIR\"\n"
+                "echo \"Mounting DMG...\"\n"
+                "MOUNT_POINT=$(hdiutil attach -nobrowse -mountpoint \"/Volumes/automarker-c-update\" \"%s\" | awk '/dev.disk/{print $3}')\n"
+                "if [ -z \"$MOUNT_POINT\" ]; then\n"
+                "    echo \"Failed to mount DMG.\"\n"
+                "    exit 1\n"
+                "fi\n"
+                "echo \"Mounted at $MOUNT_POINT\"\n"
+                "echo \"Replacing application...\"\n"
+                "osascript -e 'do shell script \"rsync -a --delete \\\"$MOUNT_POINT/automarker-c.app/\\\" \\\"%s/\\\"\" with administrator privileges'\n"
+                "echo \"Unmounting DMG...\"\n"
+                "hdiutil detach \"$MOUNT_POINT\"\n"
+                "echo \"Relaunching application...\"\n"
                 "open \"%s\"\n"
+                "echo \"Cleaning up...\"\n"
                 "rm \"%s\"\n"
                 "rm -- \"$0\"\n",
                 downloaded_path, app_path, app_path, downloaded_path);
@@ -329,7 +338,9 @@ void updater_start_download(UpdaterState* updater, CurlManager* curl_manager, co
 
     char temp_path[1024];
     char* pref_path = SDL_GetPrefPath(UPDATER_ORG, UPDATER_APP);
-#ifdef _WIN32
+#if defined(__APPLE__)
+    snprintf(temp_path, sizeof(temp_path), "%s/update.dmg", pref_path);
+#elif defined(_WIN32)
     snprintf(temp_path, sizeof(temp_path), "%s\\update.zip", pref_path);
 #else
     snprintf(temp_path, sizeof(temp_path), "%s/update.zip", pref_path);
