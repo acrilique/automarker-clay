@@ -118,11 +118,15 @@ jobs:
         xcrun stapler staple "$APP_BUNDLE_PATH"
         echo "Stapling complete."
 
+    - name: Compress app bundle
+      run: |
+        ditto -c -k --rsrc --sequesterRsrc "$APP_BUNDLE_PATH" "build/automarker-c-macos-${{ matrix.arch }}.zip"
+
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: automarker-c-macos-${{ matrix.arch }}
-        path: build/automarker-c.xcarchive/Products/Applications/automarker-c.app
+        path: build/automarker-c-macos-${{ matrix.arch }}.zip
         compression-level: 0
 
   build-windows:
@@ -254,7 +258,15 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir release-artifacts
-          find artifacts -type f \( -name "*.app" -o -name "*.zip" \) -exec mv {} release-artifacts/ \;
+          find artifacts -type f -name "*.zip" -exec mv {} release-artifacts/ \;
+          cd release-artifacts
+          for file in automarker-c-macos-*.zip; do
+            arch=$(echo "$file" | sed -n 's/automarker-c-macos-\(.*\)\.zip/\1/p')
+            unzip "$file"
+            mv automarker-c.app "automarker-c-macos-${arch}.app"
+            rm "$file"
+          done
+          cd ..
 
       - name: List flattened artifacts
         run: ls -R release-artifacts

@@ -78,9 +78,9 @@ static void update_check_callback(const char *response, bool success, void *user
         if (cJSON_IsArray(assets_array)) {
             const char* platform_str =
 #if defined(__APPLE__) && defined(__aarch64__)
-                "macos-arm64.dmg";
+                "macos-arm64.zip";
 #elif defined(__APPLE__)
-                "macos-x86_64.dmg";
+                "macos-x86_64.zip";
 #elif defined(_WIN32)
                 "windows-x64.zip";
 #else
@@ -292,9 +292,10 @@ static void on_update_download_complete(const char* downloaded_path, bool succes
                 "    fi\n"
                 "    sleep 1\n"
                 "done\n"
-                "hdiutil attach \"%s\" -mountpoint /Volumes/AutoMarkerUpdate\n"
-                "osascript -e 'do shell script \"rsync -a --delete /Volumes/AutoMarkerUpdate/automarker-c.app/ \\\"%s/\\\"\" with administrator privileges'\n"
-                "hdiutil detach /Volumes/AutoMarkerUpdate || true\n"
+                "UPDATE_DIR=$(mktemp -d)\n"
+                "unzip -o \"%s\" -d \"$UPDATE_DIR\"\n"
+                "osascript -e 'do shell script \"rsync -a --delete \\\"$UPDATE_DIR/automarker-c.app/\\\" \\\"%s/\\\"\" with administrator privileges'\n"
+                "rm -rf \"$UPDATE_DIR\"\n"
                 "open \"%s\"\n"
                 "rm \"%s\"\n"
                 "rm -- \"$0\"\n",
@@ -331,7 +332,7 @@ void updater_start_download(UpdaterState* updater, CurlManager* curl_manager, co
 #ifdef _WIN32
     snprintf(temp_path, sizeof(temp_path), "%s\\update.zip", pref_path);
 #else
-    snprintf(temp_path, sizeof(temp_path), "%s/update.dmg", pref_path);
+    snprintf(temp_path, sizeof(temp_path), "%s/update.zip", pref_path);
 #endif
     SDL_free(pref_path);
 
