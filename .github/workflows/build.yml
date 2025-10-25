@@ -8,41 +8,159 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-macos:
+  build-macos-arm64:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [arm64, x86_64]
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: 'recursive'
 
-    - name: Install dependencies (arm64)
-      if: matrix.arch == 'arm64'
+    - name: Install dependencies
       run: brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp
 
-    - name: Install dependencies (x86_64)
-      if: matrix.arch == 'x86_64'
-      run: |
-        arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
-        arch -x86_64 /usr/local/bin/brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp libpng
-
-    - name: Configure CMake (arm64)
-      if: matrix.arch == 'arm64'
+    - name: Configure CMake
       run: >
         cmake -B build
         -G Xcode
         -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+        -DCMAKE_OSX_ARCHITECTURES=arm64
 
-    - name: Configure CMake (x86_64)
-      if: matrix.arch == 'x86_64'
+    - name: Archive, Sign, and Notarize
+      if: success()
+      env:
+        MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
+        MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        MAC_PROVISIONING_PROFILE: ${{ secrets.MAC_PROVISIONING_PROFILE }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        API_KEY_ID: ${{ secrets.API_KEY_ID }}
+        API_ISSUER_ID: ${{ secrets.API_ISSUER_ID }}
+        API_KEY_P8_BASE64: ${{ secrets.API_KEY_P8_BASE64 }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+      run: |
+        set -euo pipefail
+
+        # ------ Provisioning Profile Setup ------
+        PP_PATH="$RUNNER_TEMP/build_pp.provisionprofile"
+        printf "%s" "$MAC_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
+        mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+        cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/"
+
+        # ------ Keychain Setup ------
+        KEYCHAIN_PATH=$RUNNER_TEMP/app.keychain
+        security create-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
+        security list-keychains -s $KEYCHAIN_PATH
+        security unlock-keychain -p "temporary_keychain_password" $KEYCHAIN_PATH
+        
+        # Decode and import the certificate
+        printf "%s" "$MAC_CERT_P12_BASE64" | base64 --decode > $RUNNER_TEMP/certificate.p12
+        security import $RUNNER_TEMP/certificate.p12 -k $KEYCHAIN_PATH -P $MAC_CERT_PASSWORD -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "temporary_keychain_password" $KEYCHAIN_PATH
+        
+        # ------ API Key Setup ------
+        mkdir -p $RUNNER_TEMP/.private_keys
+        printf "%s" "$API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/.private_keys/AuthKey_${API_KEY_ID}.p8"
+        
+        # Store credentials for notarytool
+        xcrun notarytool store-credentials "AUTOMARKER-CI" \
+          --issuer "$API_ISSUER_ID" \
+          --key-id "$API_KEY_ID" \
+          --key "$RUNNER_TEMP/.private_keys/AuthKey_${API_KEY_ID}.p8"
+
+        # ------ Archive the app ------
+        xcodebuild archive \
+          -project build/automarker-c.xcodeproj \
+          -scheme automarker-c \
+          -archivePath build/automarker-c.xcarchive \
+          -configuration Release
+
+        # ------ Run fixup script (we need to pass absolute path to the archive) ------
+        ./cmake/run_fixup.sh
+
+        APP_BUNDLE_PATH="build/automarker-c.xcarchive/Products/Applications/automarker-c.app"
+        echo "APP_BUNDLE_PATH=${APP_BUNDLE_PATH}" >> $GITHUB_ENV
+        ZIP_PATH="build/automarker-c.zip"
+
+        echo "--- Starting Signing & Notarization Process ---"
+
+        # 1. Deep-sign the application bundle
+        echo "1/4: Signing application bundle and all frameworks..."
+        codesign --deep --force --options runtime --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "$APP_BUNDLE_PATH"
+        echo "Signing complete."
+
+        # 2. Create and sign the distributable DMG
+        DMG_PATH="build/automarker-c-macos-arm64.dmg"
+        echo "2/4: Creating and signing DMG at ${DMG_PATH}..."
+        
+        APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
+        VOLUME_NAME="${APP_NAME}"
+        
+        # Create a staging directory for the DMG contents
+        STAGING_DIR="build/dmg-staging"
+        mkdir -p "$STAGING_DIR"
+        
+        # Copy the app bundle and create a symlink to /Applications
+        cp -R "$APP_BUNDLE_PATH" "$STAGING_DIR/"
+        ln -s /Applications "$STAGING_DIR/Applications"
+        
+        # Create the DMG from the staging directory
+        hdiutil create -ov -volname "$VOLUME_NAME" -fs HFS+ -srcfolder "$STAGING_DIR" -format UDRW "build/rw.temp.dmg"
+        
+        # Clean up the staging directory
+        rm -rf "$STAGING_DIR"
+        hdiutil convert "build/rw.temp.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
+        rm "build/rw.temp.dmg"
+        
+        codesign --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "$DMG_PATH"
+        echo "DMG created and signed."
+
+        # 3. Submit the DMG for notarization
+        echo "3/4: Submitting DMG for notarization with notarytool..."
+        xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+        echo "Notarization successful!"
+
+        # 4. Staple the notarization ticket to the DMG
+        echo "4/4: Stapling notarization ticket to the DMG..."
+        xcrun stapler staple "$DMG_PATH"
+        echo "Stapling complete."
+
+        echo "--- Verifying Final DMG ---"
+        echo "1/2: Verifying DMG code signature..."
+        codesign --verify --verbose=2 "$DMG_PATH"
+        echo "Signature verification successful."
+        
+        echo "2/2: Verifying DMG notarization..."
+        xcrun stapler validate -v "$DMG_PATH"
+        echo "Notarization verification successful."
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: automarker-c-macos-arm64
+        path: build/automarker-c-macos-arm64.dmg
+        compression-level: 0
+
+  build-macos-x86_64:
+    runs-on: macos-15-intel
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install dependencies
+      run: brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp libpng
+
+    - name: Configure CMake
       run: >
-        arch -x86_64 cmake -B build
+        cmake -B build
         -G Xcode
         -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+        -DCMAKE_OSX_ARCHITECTURES=x86_64
         -DCMAKE_PREFIX_PATH="/usr/local/opt/openblas;/usr/local/opt/libomp;/usr/local/"
 
     - name: Archive, Sign, and Notarize
@@ -109,7 +227,7 @@ jobs:
         echo "Signing complete."
 
         # 2. Create and sign the distributable DMG
-        DMG_PATH="build/automarker-c-macos-${{ matrix.arch }}.dmg"
+        DMG_PATH="build/automarker-c-macos-x86_64.dmg"
         echo "2/4: Creating and signing DMG at ${DMG_PATH}..."
         
         APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
@@ -161,8 +279,8 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: automarker-c-macos-${{ matrix.arch }}
-        path: build/automarker-c-macos-${{ matrix.arch }}.dmg
+        name: automarker-c-macos-x86_64
+        path: build/automarker-c-macos-x86_64.dmg
         compression-level: 0
 
   build-windows:
@@ -279,7 +397,7 @@ jobs:
         compression-level: 0
 
   release:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [build-macos-arm64, build-macos-x86_64, build-windows, build-linux]
     runs-on: ubuntu-latest
     environment: deploy
     permissions:
@@ -299,14 +417,8 @@ jobs:
         run: |
           mkdir release-artifacts
           find artifacts -type f -name "*.zip" -exec mv {} release-artifacts/ \;
-          cd release-artifacts
-          for file in automarker-c-macos-*.zip; do
-            arch=$(echo "$file" | sed -n 's/automarker-c-macos-\(.*\)\.zip/\1/p')
-            unzip "$file"
-            mv automarker-c.app "automarker-c-macos-${arch}.app"
-            rm "$file"
-          done
-          cd ..
+          find artifacts -type f -name "*.dmg" -exec mv {} release-artifacts/ \;
+          ls -R release-artifacts
 
       - name: List flattened artifacts
         run: ls -R release-artifacts
