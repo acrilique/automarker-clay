@@ -39,11 +39,11 @@ jobs:
     - name: Configure CMake (x86_64)
       if: matrix.arch == 'x86_64'
       run: >
-        arch -x86_64 /usr/local/bin/cmake -B build
+        arch -x86_64 cmake -B build
         -G Xcode
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-        -DCMAKE_PREFIX_PATH="/usr/local/"
+        -DCMAKE_PREFIX_PATH="/usr/local/opt/openblas;/usr/local/opt/libomp;/usr/local/"
 
     - name: Archive, Sign, and Notarize
       if: success()
