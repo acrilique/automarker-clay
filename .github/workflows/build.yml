@@ -115,7 +115,19 @@ jobs:
         APP_NAME=$(basename "$APP_BUNDLE_PATH" .app)
         VOLUME_NAME="${APP_NAME}"
         
-        hdiutil create -ov -volname "$VOLUME_NAME" -fs HFS+ -srcfolder "$APP_BUNDLE_PATH" -format UDRW "build/rw.temp.dmg"
+        # Create a staging directory for the DMG contents
+        STAGING_DIR="build/dmg-staging"
+        mkdir -p "$STAGING_DIR"
+        
+        # Copy the app bundle and create a symlink to /Applications
+        cp -R "$APP_BUNDLE_PATH" "$STAGING_DIR/"
+        ln -s /Applications "$STAGING_DIR/Applications"
+        
+        # Create the DMG from the staging directory
+        hdiutil create -ov -volname "$VOLUME_NAME" -fs HFS+ -srcfolder "$STAGING_DIR" -format UDRW "build/rw.temp.dmg"
+        
+        # Clean up the staging directory
+        rm -rf "$STAGING_DIR"
         hdiutil convert "build/rw.temp.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG_PATH"
         rm "build/rw.temp.dmg"
         
