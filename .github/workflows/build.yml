@@ -20,13 +20,13 @@ jobs:
 
     - name: Install dependencies (arm64)
       if: matrix.arch == 'arm64'
-      run: brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp cjson
+      run: brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp
 
     - name: Install dependencies (x86_64)
       if: matrix.arch == 'x86_64'
       run: |
         arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
-        arch -x86_64 /usr/local/bin/brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp libpng cjson
+        arch -x86_64 /usr/local/bin/brew install sdl3 sdl3_image sdl3_ttf curl fftw libsndfile openblas libomp libpng
 
     - name: Configure CMake
       run: >
@@ -122,7 +122,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: automarker-c-macos-${{ matrix.arch }}
-        path: build/automarker-c-macos-${{ matrix.arch }}.dmg
+        path: build/automarker-c.xcarchive/Products/Applications/automarker-c.app
         compression-level: 0
 
   build-windows:
@@ -254,7 +254,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir release-artifacts
-          find artifacts -type f \( -name "*.dmg" -o -name "*.zip" \) -exec mv {} release-artifacts/ \;
+          find artifacts -type f \( -name "*.app" -o -name "*.zip" \) -exec mv {} release-artifacts/ \;
 
       - name: List flattened artifacts
         run: ls -R release-artifacts
