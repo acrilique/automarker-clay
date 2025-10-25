@@ -176,7 +176,9 @@ jobs:
       uses: lukka/run-vcpkg@v11
 
     - name: Configure CMake
-      run: cmake -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+      run: cmake -B build -A x64 \
+        -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake \
+        -DVCPKG_BUILD_TYPE=release
 
     - name: Build
       run: cmake --build build --config Release
