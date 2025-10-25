@@ -8,7 +8,8 @@
     "libsndfile",
     "openblas",
     "libpng",
-    "cjson"
+    "cjson",
+    "pkgconf"
   ],
   "builtin-baseline": "e62a246236f428c598fb1278eef4bdae8634069f"
 }
