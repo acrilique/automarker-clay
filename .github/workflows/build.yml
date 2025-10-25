@@ -34,8 +34,6 @@ jobs:
         -G Xcode
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-    - name: Build
-      run: cmake --build build --config Release
 
     - name: Archive, Sign, and Notarize
       if: success()
@@ -47,6 +45,8 @@ jobs:
         API_KEY_ID: ${{ secrets.API_KEY_ID }}
         API_ISSUER_ID: ${{ secrets.API_ISSUER_ID }}
         API_KEY_P8_BASE64: ${{ secrets.API_KEY_P8_BASE64 }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
       run: |
         set -euo pipefail
 
@@ -82,26 +82,41 @@ jobs:
           -project build/automarker-c.xcodeproj \
           -scheme automarker-c \
           -archivePath build/automarker-c.xcarchive \
-          -destination "generic/platform=macOS" \
-          CODE_SIGN_IDENTITY="Developer ID Application: Lluc Simó Margalef (${APPLE_TEAM_ID})" \
-          CODE_SIGN_STYLE=Manual \
-          ENABLE_HARDENED_RUNTIME=YES \
-          OTHER_CODE_SIGN_FLAGS="--timestamp"
+          -configuration Release
 
-        # ------ Export and notarize ------
-        xcodebuild -exportArchive \
-          -archivePath build/automarker-c.xcarchive \
-          -exportPath build/export \
-          -exportOptionsPlist exportOptions.plist \
-          -allowProvisioningUpdates
+        # ------ Run fixup script (we need to pass absolute path to the archive) ------
+        ./cmake/run_fixup.sh
 
-        # ------ Find and rename the DMG ------
-        FINAL_DMG=$(find build/export -name "*.dmg" -print -quit)
-        if [[ -z "${FINAL_DMG}" ]]; then
-          echo "Error: No DMG found in export directory"
-          exit 1
-        fi
-        mv "$FINAL_DMG" "build/automarker-c-macos-${{ matrix.arch }}.dmg"
+        APP_BUNDLE_PATH="build/automarker-c.xcarchive/Products/Applications/automarker-c.app"
+        ZIP_PATH="build/automarker-c.zip"
+
+        echo "--- Starting Signing & Notarization Process ---"
+
+        # 1. Deep-sign the application bundle
+        echo "1/4: Signing application bundle and all frameworks..."
+        codesign --deep --force --options runtime --sign "Developer ID Application: Lluc Simó Margalef ($APPLE_TEAM_ID)" "$APP_BUNDLE_PATH"
+        echo "Signing complete."
+
+        # 2. Create a ZIP archive for the notarization service
+        echo "2/4: Creating ZIP archive for notarization..."
+        ditto -c -k --rsrc --sequesterRsrc "$APP_BUNDLE_PATH" "$ZIP_PATH"
+        echo "ZIP archive created at ${ZIP_PATH}"
+
+        # 3. Submit for notarization
+        echo "3/4: Submitting for notarization with notarytool..."
+        echo "(This may take several minutes. You can check the status in your email.)"
+        xcrun notarytool submit "$ZIP_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+        echo "Notarization successful!"
+
+        # 4. Staple the notarization ticket to the app bundle
+        echo "4/4: Stapling notarization ticket to the app bundle..."
+        xcrun stapler staple "$APP_BUNDLE_PATH"
+        echo "Stapling complete."
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

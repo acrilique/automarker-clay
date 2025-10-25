@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <cjson/cJSON.h>
+#include <cJSON.h>
 
 #ifndef APP_VERSION
 #define APP_VERSION "0.0.0"
