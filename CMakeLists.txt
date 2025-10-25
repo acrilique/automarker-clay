@@ -105,15 +105,27 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # --- Linking Libraries to Main Executable ---
 # Link against the official targets provided by find_package and the subprojects.
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    SDL3::SDL3
-    SDL3_image::SDL3_image
-    SDL3_ttf::SDL3_ttf
-    CURL::libcurl
-    cjson
-    SDL3_sound::SDL3_sound
-    CARA::CARA
-)
+if(CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES ".*/vcpkg.cmake")
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        SDL3::SDL3
+        SDL3_image::SDL3_image
+        SDL3_ttf::SDL3_ttf
+        CURL::libcurl
+        cjson
+        SDL3_sound::SDL3_sound
+        CARA::CARA
+    )
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        ${SDL3_LIBRARIES}
+        ${SDL3_image_LIBRARIES}
+        ${SDL3_ttf_LIBRARIES}
+        ${CURL_LIBRARIES}
+        cjson
+        SDL3_sound::SDL3_sound
+        CARA::CARA
+    )
+endif()
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -162,7 +174,6 @@ if(APPLE)
     # --- macOS Library Bundling ---
     # The fixup_bundle script is now run manually after the archive is created.
     # No extra build phases are needed here.
-    execute_process(COMMAND chmod a+x "${CMAKE_CURRENT_SOURCE_DIR}/cmake/run_fixup.sh")
 else()
     set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
     add_custom_command(
