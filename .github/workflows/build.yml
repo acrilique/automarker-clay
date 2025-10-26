@@ -411,14 +411,29 @@ jobs:
         sudo make install
         cd ../..
 
+    - name: Create .desktop file
+      run: |
+        mkdir -p resources/linux
+        cat <<EOF > resources/linux/com.acrilique.automarker.desktop
+        [Desktop Entry]
+        Name=automarker-c
+        Exec=automarker-c
+        Icon=automarker-c
+        Type=Application
+        Categories=Utility;
+        EOF
+
     - name: Build AppImage
       run: appimage-builder --recipe appimage-builder.yml
+
+    - name: List files
+      run: ls -R .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: automarker-c-appimage
-        path: automarker-c-latest-x86_64.AppImage
+        path: automarker-c-*.AppImage
         compression-level: 0
 
   release:

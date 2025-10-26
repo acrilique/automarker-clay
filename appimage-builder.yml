@@ -8,6 +8,8 @@ script:
   - mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
   - cp resources/sample.png AppDir/usr/share/icons/hicolor/256x256/apps/automarker-c.png
   - cp -r resources AppDir/usr/share/
+  - mkdir -p AppDir/usr/share/applications
+  - cp resources/linux/com.acrilique.automarker.desktop AppDir/usr/share/applications/
 AppDir:
   path: ./AppDir
   app_info:
