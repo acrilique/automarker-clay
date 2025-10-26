@@ -373,7 +373,10 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential git make cmake pkg-config ninja-build curl libcurl4-openssl-dev libfftw3-dev libsndfile1-dev libopenblas-dev libomp-dev libpng-dev gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libfribidi-dev libjack-dev libsndio-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev liburing-dev libaom-dev libdav1d-dev libjpeg-turbo8-dev libavif-dev libjxl-dev libtiff-dev libwebp-dev zlib1g-dev libfreetype-dev libharfbuzz-dev libcjson-dev
+        sudo apt-get install -y build-essential git make cmake pkg-config ninja-build curl libcurl4-openssl-dev libfftw3-dev libsndfile1-dev libopenblas-dev libomp-dev libpng-dev gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libfribidi-dev libjack-dev libsndio-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libpipewire-0.3-dev libwayland-dev libdecor-0-dev liburing-dev libaom-dev libdav1d-dev libjpeg-turbo8-dev libavif-dev libjxl-dev libtiff-dev libwebp-dev zlib1g-dev libfreetype-dev libharfbuzz-dev libcjson-dev python3-pip squashfs-tools zsync
+
+    - name: Install appimage-builder
+      run: sudo pip3 install appimage-builder --break-system-packages
 
     - name: Build and install SDL3
       run: |
@@ -408,40 +411,14 @@ jobs:
         sudo make install
         cd ../..
 
-    - name: Configure CMake
-      run: |
-        LIBOMP_PATH=$(find /usr/lib -name "libomp.so")
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="/usr/lib/openblas-base" \
-          -DCMAKE_C_FLAGS="-I/usr/include/openblas" \
-          -DOpenMP_C_FLAGS="-fopenmp" \
-          -DOpenMP_C_LIB_NAMES="omp" \
-          -DOpenMP_omp_LIBRARY="$LIBOMP_PATH"
-
-    - name: Build
-      run: cmake --build build --config Release
-
-    - name: Package
-      run: |
-        mkdir -p release/package/lib
-        cp build/Release/automarker-c release/package/
-        cp -R build/Release/resources release/package/
-
-        DEPS=$(ldd build/Release/automarker-c | grep "=> /" | awk '{print $3}')
-
-        for DEP in $DEPS; do
-          cp $DEP release/package/lib/
-        done
-
-        cd release
-        zip -r automarker-c-linux-x64.zip package
+    - name: Build AppImage
+      run: appimage-builder --recipe appimage-builder.yml
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: automarker-c-linux-x64
-        path: release/automarker-c-linux-x64.zip
+        name: automarker-c-appimage
+        path: automarker-c-latest-x86_64.AppImage
         compression-level: 0
 
   release:
@@ -466,6 +443,7 @@ jobs:
           mkdir release-artifacts
           find artifacts -type f -name "*.zip" -exec mv {} release-artifacts/ \;
           find artifacts -type f -name "*.dmg" -exec mv {} release-artifacts/ \;
+          find artifacts -type f -name "*.AppImage" -exec mv {} release-artifacts/ \;
           ls -R release-artifacts
 
       - name: List flattened artifacts

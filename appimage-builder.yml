@@ -1,0 +1,44 @@
+version: 1
+script:
+  - cmake . -B build -DCMAKE_BUILD_TYPE=Release
+  - cmake --build build
+  - ls -R .
+  - mkdir -p AppDir/usr/bin
+  - cp build/Release/automarker-c AppDir/usr/bin/
+  - mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+  - cp resources/sample.png AppDir/usr/share/icons/hicolor/256x256/apps/automarker-c.png
+  - cp -r resources AppDir/usr/share/
+AppDir:
+  path: ./AppDir
+  app_info:
+    id: com.acrilique.automarker
+    name: automarker-c
+    icon: automarker-c
+    version: 0.2.3
+    exec: usr/bin/automarker-c
+    exec_args: $@
+  apt:
+    arch: amd64
+    sources:
+      - sourceline: deb http://archive.ubuntu.com/ubuntu/ noble main restricted universe multiverse
+        key_url: http://keyserver.ubuntu.com:11371/pks/lookup?op=get&search=0x871920D1991BC93C
+    include:
+      - libcurl4-openssl-dev
+      - libfftw3-dev
+      - libsndfile1-dev
+      - libopenblas-dev
+      - libpng-dev
+      - libomp-dev
+  files:
+    include:
+      - usr/bin/automarker-c
+    exclude:
+      - usr/share/man
+      - usr/share/doc
+      - usr/share/info
+      - usr/share/lintian
+      - usr/share/locale
+AppImage:
+  arch: x86_64
+  update-information: None
+  sign-key: None
