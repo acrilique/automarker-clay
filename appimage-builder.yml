@@ -5,6 +5,8 @@ script:
   - ls -R .
   - mkdir -p AppDir/usr/bin
   - cp build/Release/automarker-c AppDir/usr/bin/
+  - mkdir -p AppDir/usr/lib
+  - cp build/Release/libSDL3_sound.so.3 AppDir/usr/lib/
   - mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
   - cp resources/sample.png AppDir/usr/share/icons/hicolor/256x256/apps/automarker-c.png
   - cp -r resources AppDir/usr/share/
