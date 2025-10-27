@@ -72,10 +72,26 @@ static void run_jsx_script(const char *script_content) {
         free(ae_path);
     }
 #else
-    // On macOS, we use osascript
-    char command[2048];
-    snprintf(command, sizeof(command), "osascript -e 'tell application \"Adobe After Effects\" to DoScriptFile \"%s\"'", temp_path);
-    system(command);
+    char as_path[1024];
+    strcpy(as_path, "/tmp/ae_launcher-XXXXXX.applescript");
+    int as_fd = mkstemp(as_path);
+
+    if (as_fd != -1) {
+        FILE *as_fp = fdopen(as_fd, "w");
+        if (as_fp) {
+            // This script tells AE to activate and then execute our JSX file.
+            fprintf(as_fp, "tell application id \"com.adobe.AfterEffects.application\"\n");
+            fprintf(as_fp, "    activate\n");
+            fprintf(as_fp, "    DoScriptFile (POSIX file \"%s\")\n", temp_path);
+            fprintf(as_fp, "end tell\n");
+            fclose(as_fp);
+
+            char command[2048];
+            snprintf(command, sizeof(command), "osascript \"%s\"", as_path);
+            system(command);
+        }
+        remove(as_path); // Clean up the AppleScript file.
+    }
 #endif
 
     remove(temp_path);
