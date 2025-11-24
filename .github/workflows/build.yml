@@ -426,9 +426,6 @@ jobs:
     - name: Build AppImage
       run: appimage-builder --recipe appimage-builder.yml
 
-    - name: List files
-      run: ls -R .
-
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
