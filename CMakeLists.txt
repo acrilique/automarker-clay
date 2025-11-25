@@ -93,6 +93,8 @@ set(SOURCES
 
 if(APPLE)
     add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCES})
+elseif(WIN32)
+    add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
 else()
     add_executable(${PROJECT_NAME} ${SOURCES})
 endif()
