@@ -18,6 +18,7 @@
 #ifndef PREMIERE_PRO_H
 #define PREMIERE_PRO_H
 
+#include <SDL3/SDL.h>
 #include "curl_manager.h"
 
 typedef enum {
@@ -28,7 +29,7 @@ typedef enum {
 } CepInstallStatus;
 
 typedef struct {
-    CepInstallStatus status;
+    SDL_AtomicInt status;
     char error_message[256];
 } CepInstallState;
 

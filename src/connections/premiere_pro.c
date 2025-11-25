@@ -60,11 +60,11 @@ static int install_cep_thread(void *data) {
 
     if (result != 0) {
         printf("Extension installation failed with code %d\n", result);
-        state->status = CEP_INSTALL_ERROR;
+        SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
         snprintf(state->error_message, sizeof(state->error_message), "Installation failed (code %d)", result);
     } else {
         printf("Extension installation script finished.\n");
-        state->status = CEP_INSTALL_SUCCESS;
+        SDL_SetAtomicInt(&state->status, CEP_INSTALL_SUCCESS);
     }
 
     free(install_data);
@@ -72,13 +72,13 @@ static int install_cep_thread(void *data) {
 }
 
 void install_cep_extension(const char *base_path, CepInstallState *state) {
-    if (state->status == CEP_INSTALL_IN_PROGRESS) {
+    if (SDL_GetAtomicInt(&state->status) == CEP_INSTALL_IN_PROGRESS) {
         return;
     }
 
     CepInstallData *data = malloc(sizeof(CepInstallData));
     if (!data) {
-        state->status = CEP_INSTALL_ERROR;
+        SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
         snprintf(state->error_message, sizeof(state->error_message), "Memory allocation failed");
         return;
     }
@@ -87,11 +87,11 @@ void install_cep_extension(const char *base_path, CepInstallState *state) {
     data->base_path[sizeof(data->base_path) - 1] = '\0';
     data->state = state;
     
-    state->status = CEP_INSTALL_IN_PROGRESS;
+    SDL_SetAtomicInt(&state->status, CEP_INSTALL_IN_PROGRESS);
     SDL_Thread *thread = SDL_CreateThread(install_cep_thread, "CepInstallThread", data);
     
     if (!thread) {
-        state->status = CEP_INSTALL_ERROR;
+        SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
         snprintf(state->error_message, sizeof(state->error_message), "Failed to create thread: %s", SDL_GetError());
         free(data);
     } else {

@@ -226,14 +226,15 @@ static void render_help_modal_content(AppState *app_state) {
     // CEP Section
     CLAY_TEXT(CLAY_STRING("The CEP extension allows this app to communicate with Adobe Premiere Pro. If Premiere was running during the extension's installation, you'll need to restart it for the extension to be loaded."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
     
-    if (app_state->cep_install_state.status == CEP_INSTALL_IN_PROGRESS) {
+    int cep_status = SDL_GetAtomicInt(&app_state->cep_install_state.status);
+    if (cep_status == CEP_INSTALL_IN_PROGRESS) {
         CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
              CLAY_TEXT(CLAY_STRING("Installing..."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
         }
     } else {
-        if (app_state->cep_install_state.status == CEP_INSTALL_SUCCESS) {
+        if (cep_status == CEP_INSTALL_SUCCESS) {
              CLAY_TEXT(CLAY_STRING("Extension installed successfully!"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {0, 255, 0, 255}}));
-        } else if (app_state->cep_install_state.status == CEP_INSTALL_ERROR) {
+        } else if (cep_status == CEP_INSTALL_ERROR) {
              Clay_String error_msg = { .isStaticallyAllocated = true, .length = (int32_t)strlen(app_state->cep_install_state.error_message), .chars = app_state->cep_install_state.error_message };
              CLAY_TEXT(error_msg, CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {255, 0, 0, 255}}));
         }
@@ -352,9 +353,9 @@ static void handleHelp(Clay_ElementId elementId, Clay_PointerData pointerData,
     AppState *app_state = (AppState *)userData;
     
     // Reset CEP install status if it was a completed state
-    if (app_state->cep_install_state.status == CEP_INSTALL_SUCCESS ||
-        app_state->cep_install_state.status == CEP_INSTALL_ERROR) {
-      app_state->cep_install_state.status = CEP_INSTALL_IDLE;
+    int cep_status = SDL_GetAtomicInt(&app_state->cep_install_state.status);
+    if (cep_status == CEP_INSTALL_SUCCESS || cep_status == CEP_INSTALL_ERROR) {
+      SDL_SetAtomicInt(&app_state->cep_install_state.status, CEP_INSTALL_IDLE);
     }
     
     app_state->modal.visible = true;
@@ -957,7 +958,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   state->curl_manager = curl_manager_create();
   state->updater_state = updater_create();
-  state->cep_install_state.status = CEP_INSTALL_IDLE;
+  SDL_SetAtomicInt(&state->cep_install_state.status, CEP_INSTALL_IDLE);
 
   if (state->updater_state->check_on_startup) {
       updater_check_for_updates(state->updater_state, state->curl_manager);
