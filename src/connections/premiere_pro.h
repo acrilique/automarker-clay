@@ -20,7 +20,19 @@
 
 #include "curl_manager.h"
 
-void install_cep_extension(const char *base_path);
+typedef enum {
+    CEP_INSTALL_IDLE,
+    CEP_INSTALL_IN_PROGRESS,
+    CEP_INSTALL_SUCCESS,
+    CEP_INSTALL_ERROR
+} CepInstallStatus;
+
+typedef struct {
+    CepInstallStatus status;
+    char error_message[256];
+} CepInstallState;
+
+void install_cep_extension(const char *base_path, CepInstallState *state);
 int premiere_pro_add_markers(CurlManager *curl_manager, const double *beats, int num_beats);
 int premiere_pro_clear_all_markers(CurlManager *curl_manager);
 

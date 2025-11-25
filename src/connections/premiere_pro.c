@@ -31,9 +31,17 @@ typedef struct {
 #include <windows.h>
 #endif
 
-void install_cep_extension(const char *base_path) {
+typedef struct {
+    char base_path[1024];
+    CepInstallState *state;
+} CepInstallData;
+
+static int install_cep_thread(void *data) {
+    CepInstallData *install_data = (CepInstallData *)data;
+    CepInstallState *state = install_data->state;
     char command[2048];
     char installer_path[1024];
+    const char *base_path = install_data->base_path;
 
 #ifdef _WIN32
     snprintf(installer_path, sizeof(installer_path), "%sresources\\installers\\extension_installer_win.bat", base_path);
@@ -52,8 +60,41 @@ void install_cep_extension(const char *base_path) {
 
     if (result != 0) {
         printf("Extension installation failed with code %d\n", result);
+        state->status = CEP_INSTALL_ERROR;
+        snprintf(state->error_message, sizeof(state->error_message), "Installation failed (code %d)", result);
     } else {
         printf("Extension installation script finished.\n");
+        state->status = CEP_INSTALL_SUCCESS;
+    }
+
+    free(install_data);
+    return 0;
+}
+
+void install_cep_extension(const char *base_path, CepInstallState *state) {
+    if (state->status == CEP_INSTALL_IN_PROGRESS) {
+        return;
+    }
+
+    CepInstallData *data = malloc(sizeof(CepInstallData));
+    if (!data) {
+        state->status = CEP_INSTALL_ERROR;
+        snprintf(state->error_message, sizeof(state->error_message), "Memory allocation failed");
+        return;
+    }
+
+    strncpy(data->base_path, base_path, sizeof(data->base_path) - 1);
+    data->state = state;
+    
+    state->status = CEP_INSTALL_IN_PROGRESS;
+    SDL_Thread *thread = SDL_CreateThread(install_cep_thread, "CepInstallThread", data);
+    
+    if (!thread) {
+        state->status = CEP_INSTALL_ERROR;
+        snprintf(state->error_message, sizeof(state->error_message), "Failed to create thread: %s", SDL_GetError());
+        free(data);
+    } else {
+        SDL_DetachThread(thread);
     }
 }
 

@@ -138,6 +138,7 @@ struct app_state {
   WaveformData waveformData;
   CurlManager *curl_manager;
   UpdaterState *updater_state;
+  CepInstallState cep_install_state;
 };
 
 
@@ -178,8 +179,7 @@ static void handle_install_cep_extension(Clay_ElementId elementId,
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
-    install_cep_extension(app_state->base_path);
-    app_state->modal.visible = false;
+    install_cep_extension(app_state->base_path, &app_state->cep_install_state);
   }
 }
 
@@ -225,9 +225,23 @@ static void render_help_modal_content(AppState *app_state) {
     
     // CEP Section
     CLAY_TEXT(CLAY_STRING("The CEP extension allows this app to communicate with Adobe Premiere Pro. If Premiere was running during the extension's installation, you'll need to restart it for the extension to be loaded."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
-    CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
-        Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
-        CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+    
+    if (app_state->cep_install_state.status == CEP_INSTALL_IN_PROGRESS) {
+        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+             CLAY_TEXT(CLAY_STRING("Installing..."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+        }
+    } else {
+        if (app_state->cep_install_state.status == CEP_INSTALL_SUCCESS) {
+             CLAY_TEXT(CLAY_STRING("Extension installed successfully!"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {0, 255, 0, 255}}));
+        } else if (app_state->cep_install_state.status == CEP_INSTALL_ERROR) {
+             Clay_String error_msg = { .isStaticallyAllocated = true, .length = (int32_t)strlen(app_state->cep_install_state.error_message), .chars = app_state->cep_install_state.error_message };
+             CLAY_TEXT(error_msg, CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {255, 0, 0, 255}}));
+        }
+        
+        CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(8)}, .backgroundColor = Clay_Hovered() ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)}) {
+            Clay_OnHover(handle_install_cep_extension, (intptr_t)app_state);
+            CLAY_TEXT(CLAY_STRING("Install CEP Extension"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE, .textAlignment = CLAY_TEXT_ALIGN_CENTER}));
+        }
     }
 
     render_separator();
@@ -936,6 +950,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   state->curl_manager = curl_manager_create();
   state->updater_state = updater_create();
+  state->cep_install_state.status = CEP_INSTALL_IDLE;
 
   if (state->updater_state->check_on_startup) {
       updater_check_for_updates(state->updater_state, state->curl_manager);
