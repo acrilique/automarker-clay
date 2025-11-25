@@ -350,6 +350,13 @@ static void handleHelp(Clay_ElementId elementId, Clay_PointerData pointerData,
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
+    
+    // Reset CEP install status if it was a completed state
+    if (app_state->cep_install_state.status == CEP_INSTALL_SUCCESS ||
+        app_state->cep_install_state.status == CEP_INSTALL_ERROR) {
+      app_state->cep_install_state.status = CEP_INSTALL_IDLE;
+    }
+    
     app_state->modal.visible = true;
     app_state->modal.render_content = render_help_modal_content;
   }
