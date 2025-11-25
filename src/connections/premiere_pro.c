@@ -84,6 +84,7 @@ void install_cep_extension(const char *base_path, CepInstallState *state) {
     }
 
     strncpy(data->base_path, base_path, sizeof(data->base_path) - 1);
+    data->base_path[sizeof(data->base_path) - 1] = '\0';
     data->state = state;
     
     state->status = CEP_INSTALL_IN_PROGRESS;
