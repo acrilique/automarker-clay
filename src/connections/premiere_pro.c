@@ -72,7 +72,24 @@ static int install_cep_thread(void *data) {
 }
 
 void install_cep_extension(const char *base_path, CepInstallState *state) {
+    if (!state) {
+        return;
+    }
+
+    if (!base_path) {
+        SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
+        snprintf(state->error_message, sizeof(state->error_message), "base_path is NULL");
+        return;
+    }
+
     if (SDL_GetAtomicInt(&state->status) == CEP_INSTALL_IN_PROGRESS) {
+        return;
+    }
+
+    size_t base_path_len = strlen(base_path);
+    if (base_path_len >= sizeof(((CepInstallData *)0)->base_path)) {
+        SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
+        snprintf(state->error_message, sizeof(state->error_message), "base_path too long (%zu bytes)", base_path_len);
         return;
     }
 
@@ -83,10 +100,10 @@ void install_cep_extension(const char *base_path, CepInstallState *state) {
         return;
     }
 
-    strncpy(data->base_path, base_path, sizeof(data->base_path) - 1);
-    data->base_path[sizeof(data->base_path) - 1] = '\0';
+    memcpy(data->base_path, base_path, base_path_len + 1);
     data->state = state;
-    
+
+    state->error_message[0] = '\0';
     SDL_SetAtomicInt(&state->status, CEP_INSTALL_IN_PROGRESS);
     SDL_Thread *thread = SDL_CreateThread(install_cep_thread, "CepInstallThread", data);
     
