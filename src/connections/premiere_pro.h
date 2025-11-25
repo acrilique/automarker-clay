@@ -21,16 +21,37 @@
 #include <SDL3/SDL.h>
 #include "curl_manager.h"
 
+/**
+ * Status values for the CEP extension installation process.
+ * 
+ * Thread-safety note: Status transitions are performed atomically via SDL atomic
+ * operations. Terminal states (CEP_INSTALL_SUCCESS, CEP_INSTALL_ERROR) are set
+ * only after all associated data (e.g., error_message) has been written.
+ */
 typedef enum {
-    CEP_INSTALL_IDLE,
-    CEP_INSTALL_IN_PROGRESS,
-    CEP_INSTALL_SUCCESS,
-    CEP_INSTALL_ERROR
+    CEP_INSTALL_IDLE,          /**< No installation in progress */
+    CEP_INSTALL_IN_PROGRESS,   /**< Installation is currently running */
+    CEP_INSTALL_SUCCESS,       /**< Installation completed successfully */
+    CEP_INSTALL_ERROR          /**< Installation failed; see error_message */
 } CepInstallStatus;
 
+/**
+ * This structure is shared between a worker thread (install_cep_thread) and 
+ * the UI thread. To avoid data races, the following rules MUST be observed:
+ * 
+ * 1. The `status` field MUST always be accessed via SDL atomic APIs:
+ * 
+ * 2. The `error_message` field is written by the worker thread and may only
+ *    be read by the UI thread AFTER observing a terminal status value
+ *    (CEP_INSTALL_SUCCESS or CEP_INSTALL_ERROR) via SDL_GetAtomicInt.
+ * 
+ * 3. The worker thread MUST write error_message BEFORE setting a terminal
+ *    status. SDL atomic operations provide release/acquire semantics that
+ *    ensure the error_message write is visible once the status is observed.
+ */
 typedef struct {
-    SDL_AtomicInt status;
-    char error_message[256];
+    SDL_AtomicInt status;       /**< Current installation status (use SDL atomic APIs) */
+    char error_message[256];    /**< Error details; valid only after CEP_INSTALL_ERROR */
 } CepInstallState;
 
 void install_cep_extension(const char *base_path, CepInstallState *state);
