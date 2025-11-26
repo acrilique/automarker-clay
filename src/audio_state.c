@@ -34,7 +34,7 @@ audio_data* sdl_sound_to_cara_audio(Sound_Sample *sample) {
         return NULL;
     }
     
-    audio_data *audio = malloc(sizeof(audio_data));
+    audio_data *audio = SDL_malloc(sizeof(audio_data));
     if (!audio) return NULL;
     
     // Calculate number of samples
@@ -42,9 +42,9 @@ audio_data* sdl_sound_to_cara_audio(Sound_Sample *sample) {
     size_t total_samples = sample->buffer_size / sample_size;
     
     // Allocate and copy sample data
-    audio->samples = malloc(sample->buffer_size);
+    audio->samples = SDL_malloc(sample->buffer_size);
     if (!audio->samples) {
-        free(audio);
+        SDL_free(audio);
         return NULL;
     }
     
@@ -64,9 +64,9 @@ void free_cara_audio(audio_data *audio) {
     if (!audio) return;
     
     if (audio->samples) {
-        free(audio->samples);
+        SDL_free(audio->samples);
     }
-    free(audio);
+    SDL_free(audio);
 }
 
 // Audio callback function for SDL3 streaming
@@ -86,7 +86,8 @@ static void audio_callback(void *userdata, SDL_AudioStream *stream, int addition
     }
     
     int current_pos_samples = SDL_GetAtomicInt(&state->playback_position);
-    Uint8* temp_buffer = malloc(total_bytes_needed);
+    Uint8* temp_buffer = SDL_malloc(total_bytes_needed);
+    if (!temp_buffer) return;
     int bytes_provided = 0;
 
     while (bytes_provided < total_bytes_needed) {
@@ -114,7 +115,7 @@ static void audio_callback(void *userdata, SDL_AudioStream *stream, int addition
 
     SDL_PutAudioStreamData(stream, temp_buffer, total_bytes_needed);
     SDL_SetAtomicInt(&state->playback_position, current_pos_samples);
-    free(temp_buffer);
+    SDL_free(temp_buffer);
 }
 
 // Process audio file using CARA beat tracking
@@ -126,12 +127,12 @@ static void process_audio_file(AudioState *state) {
     state->sample = NULL;
   }
   if (state->beat_positions) {
-    free(state->beat_positions);
+    SDL_free(state->beat_positions);
     state->beat_positions = NULL;
   }
   state->beats_buffer_size = 1024;
   state->beat_positions =
-      malloc(sizeof(unsigned int) * state->beats_buffer_size);
+      SDL_malloc(sizeof(unsigned int) * state->beats_buffer_size);
   state->beat_count = 0;
   state->status = STATUS_DECODE;
   SDL_UnlockMutex(state->data_mutex);
@@ -207,7 +208,7 @@ static void process_audio_file(AudioState *state) {
     // Ensure we have enough space
     if (beat_result.num_beats > (size_t)state->beats_buffer_size) {
       state->beats_buffer_size = beat_result.num_beats * 2;
-      state->beat_positions = realloc(state->beat_positions,
+      state->beat_positions = SDL_realloc(state->beat_positions,
                                      sizeof(unsigned int) * state->beats_buffer_size);
     }
 
@@ -258,7 +259,7 @@ static void process_audio_file(AudioState *state) {
   // Create playback buffer
   if (!state->playback_buffer) {
     state->playback_buffer_size = state->sample->buffer_size / sizeof(float);
-    state->playback_buffer = malloc(state->sample->buffer_size);
+    state->playback_buffer = SDL_malloc(state->sample->buffer_size);
     if (state->playback_buffer) {
       memcpy(state->playback_buffer, state->sample->buffer,
              state->sample->buffer_size);
@@ -366,7 +367,7 @@ void audio_state_load_file(AudioState *state, const char *file_path) {
 
     // Clean up all data related to the previous file
     if (state->file_path) {
-        free(state->file_path);
+        SDL_free(state->file_path);
         state->file_path = NULL;
     }
     if (state->sample) {
@@ -374,18 +375,18 @@ void audio_state_load_file(AudioState *state, const char *file_path) {
         state->sample = NULL;
     }
     if (state->beat_positions) {
-        free(state->beat_positions);
+        SDL_free(state->beat_positions);
         state->beat_positions = NULL;
         state->beat_count = 0;
     }
     if (state->playback_buffer) {
-        free(state->playback_buffer);
+        SDL_free(state->playback_buffer);
         state->playback_buffer = NULL;
         state->playback_buffer_size = 0;
     }
     
     // Now, create a persistent copy of the new file path
-    state->file_path = strdup(file_path);
+    state->file_path = SDL_strdup(file_path);
     if (!state->file_path) {
         printf("Error: Could not allocate memory for file path.\n");
         return;
@@ -424,7 +425,7 @@ void audio_state_request_stop(AudioState *state) {
         state->sample = NULL;
     }
     if (state->beat_positions) {
-        free(state->beat_positions);
+        SDL_free(state->beat_positions);
         state->beat_positions = NULL;
         state->beat_count = 0;
         state->beats_buffer_size = 0;
@@ -480,16 +481,16 @@ void audio_state_destroy(AudioState *state) {
     
     // Free all dynamically allocated memory
     if (state->file_path) {
-        free(state->file_path);
+        SDL_free(state->file_path);
     }
     if (state->sample) {
         Sound_FreeSample(state->sample);
     }
     if (state->beat_positions) {
-        free(state->beat_positions);
+        SDL_free(state->beat_positions);
     }
     if (state->playback_buffer) {
-        free(state->playback_buffer);
+        SDL_free(state->playback_buffer);
     }
     
     // Finally, free the state struct itself

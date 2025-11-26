@@ -133,8 +133,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   /* Initialize Clay */
   uint64_t totalMemorySize = Clay_MinMemorySize();
+  void *clayMemoryBuffer = SDL_malloc(totalMemorySize);
+  if (!clayMemoryBuffer) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to allocate memory for Clay arena");
+    return SDL_APP_FAILURE;
+  }
   Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(
-      totalMemorySize, malloc(totalMemorySize));
+      totalMemorySize, clayMemoryBuffer);
 
   int width, height;
   SDL_GetWindowSize(state->window, &width, &height);

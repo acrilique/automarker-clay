@@ -249,11 +249,11 @@ static void SDL_Clay_RenderFillRoundedRect(Clay_SDL3RendererData *rendererData, 
     int totalVertices = 4 + (4 * (numCircleSegments * 2)) + 2*4;
     int totalIndices = 6 + (4 * (numCircleSegments * 3)) + 6*4;
 
-    SDL_Vertex *vertices = (SDL_Vertex *)malloc(totalVertices * sizeof(SDL_Vertex));
+    SDL_Vertex *vertices = (SDL_Vertex *)SDL_malloc(totalVertices * sizeof(SDL_Vertex));
     if (!vertices) return;
-    int *indices = (int *)malloc(totalIndices * sizeof(int));
+    int *indices = (int *)SDL_malloc(totalIndices * sizeof(int));
     if (!indices) {
-        free(vertices);
+        SDL_free(vertices);
         return;
     }
 
@@ -341,8 +341,8 @@ static void SDL_Clay_RenderFillRoundedRect(Clay_SDL3RendererData *rendererData, 
     // Render everything
     SDL_RenderGeometry(rendererData->renderer, NULL, vertices, vertexCount, indices, indexCount);
 
-    free(vertices);
-    free(indices);
+    SDL_free(vertices);
+    SDL_free(indices);
 }
 
 static void SDL_Clay_RenderArc(Clay_SDL3RendererData *rendererData, const SDL_FPoint center, const float radius, const float startAngle, const float endAngle, const float thickness, const Clay_Color color) {
@@ -357,7 +357,7 @@ static void SDL_Clay_RenderArc(Clay_SDL3RendererData *rendererData, const SDL_FP
     const float thicknessStep = 0.4f; //arbitrary value to avoid overlapping lines. Changing THICKNESS_STEP or numCircleSegments might cause artifacts.
 
     for (float t = thicknessStep; t < thickness - thicknessStep; t += thicknessStep) {
-        SDL_FPoint *points = (SDL_FPoint *)malloc((numCircleSegments + 1) * sizeof(SDL_FPoint));
+        SDL_FPoint *points = (SDL_FPoint *)SDL_malloc((numCircleSegments + 1) * sizeof(SDL_FPoint));
         if (!points) continue;
         const float clampedRadius = SDL_max(radius - t, 1.0f);
 
@@ -368,7 +368,7 @@ static void SDL_Clay_RenderArc(Clay_SDL3RendererData *rendererData, const SDL_FP
                     SDL_roundf(center.y + SDL_sinf(angle) * clampedRadius) };
         }
         SDL_RenderLines(rendererData->renderer, points, numCircleSegments + 1);
-        free(points);
+        SDL_free(points);
     }
 }
 

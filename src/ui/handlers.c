@@ -166,7 +166,7 @@ void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
       }
 
       double *beats_in_seconds =
-          malloc(sizeof(double) * markers_in_selection_count);
+          SDL_malloc(sizeof(double) * markers_in_selection_count);
       int current_marker = 0;
       for (int i = 0; i < audio_state->beat_count; i++) {
         if (audio_state->beat_positions[i] >= audio_state->selection_start &&
@@ -194,7 +194,7 @@ void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
       default:
         break;
       }
-      free(beats_in_seconds);
+      SDL_free(beats_in_seconds);
     }
   }
 }
