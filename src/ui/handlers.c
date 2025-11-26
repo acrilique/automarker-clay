@@ -165,8 +165,16 @@ void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
         }
       }
 
+      // Handle edge case: no markers in selection
+      if (markers_in_selection_count == 0) {
+        return;
+      }
+
       double *beats_in_seconds =
           SDL_malloc(sizeof(double) * markers_in_selection_count);
+      if (!beats_in_seconds) {
+        return;
+      }
       int current_marker = 0;
       for (int i = 0; i < audio_state->beat_count; i++) {
         if (audio_state->beat_positions[i] >= audio_state->selection_start &&
@@ -392,13 +400,27 @@ void handleFileSelection(Clay_ElementId elementId,
     }
 
     char **filterPatterns = SDL_malloc(sizeof(char *) * (num_patterns + 1));
+    if (!filterPatterns) {
+      return;
+    }
+    
+    int patterns_allocated = 0;
     char **current_pattern = filterPatterns;
     for (const Sound_DecoderInfo **info = decoder_info; *info != NULL; info++) {
         for (const char **ext = (*info)->extensions; *ext != NULL; ext++) {
             // Allocate memory for the pattern string, e.g., "*.wav"
             *current_pattern = SDL_malloc(strlen(*ext) + 3);
+            if (!*current_pattern) {
+              // Cleanup previously allocated patterns
+              for (int i = 0; i < patterns_allocated; i++) {
+                SDL_free(filterPatterns[i]);
+              }
+              SDL_free(filterPatterns);
+              return;
+            }
             snprintf(*current_pattern, strlen(*ext) + 3, "*.%s", *ext);
             current_pattern++;
+            patterns_allocated++;
         }
     }
     *current_pattern = NULL; // Null-terminate the list
