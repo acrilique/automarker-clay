@@ -293,9 +293,7 @@ void build_ui(AppState *state) {
                     float thumb_x = state->waveform_view.scroll * track_width;
 
                     CLAY(CLAY_ID("ScrollbarThumb"), {.layout = {.sizing = {.width = CLAY_SIZING_FIXED(thumb_width), .height = CLAY_SIZING_FIXED(10)}}, .floating = {.attachTo = CLAY_ATTACH_TO_PARENT, .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH, .attachPoints = {.parent = CLAY_ATTACH_POINT_LEFT_CENTER, .element = CLAY_ATTACH_POINT_LEFT_CENTER}, .offset = {thumb_x, 0}}}) {
-                        if (Clay_PointerOver(CLAY_ID("ScrollbarThumb"))) {
-                            state->is_hovering_scrollbar_thumb = true;
-                        }
+                        state->is_hovering_scrollbar_thumb = Clay_PointerOver(CLAY_ID("ScrollbarThumb"));
                         CLAY_AUTO_ID({.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_GROW(0)}}, .backgroundColor = state->is_hovering_scrollbar_thumb ? COLOR_BUTTON_BG_HOVER : COLOR_BUTTON_BG, .cornerRadius = CLAY_CORNER_RADIUS(5)});
                     }
                 }
