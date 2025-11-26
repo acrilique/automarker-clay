@@ -28,19 +28,26 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <unistd.h>
+#include <sys/types.h>
 #endif
 
 void handle_open_browser(const char* url) {
 #ifdef _WIN32
     ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 #elif __APPLE__
-    char command[256];
-    snprintf(command, sizeof(command), "open %s", url);
-    system(command);
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/usr/bin/open", "open", url, (char *)NULL);
+        _exit(127);
+    }
 #else
-    char command[256];
-    snprintf(command, sizeof(command), "xdg-open %s", url);
-    system(command);
+    pid_t pid = fork();
+    if (pid == 0) {
+        execlp("xdg-open", "xdg-open", url, (char *)NULL);
+        _exit(127);
+    }
 #endif
 }
 
