@@ -267,7 +267,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->modal.visible = false;
   state->modal.render_content = NULL;
 
-  state->connected_app = APP_NONE;
+  SDL_SetAtomicInt(&state->connected_app, APP_NONE);
+  SDL_SetAtomicInt(&state->should_stop_app_status_thread, 0);
   state->app_status_thread = SDL_CreateThread(check_app_status, "AppStatusThread", (void *)state);
 
   state->curl_manager = curl_manager_create();
@@ -526,7 +527,8 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
   AppState *state = appstate;
 
   if (state) {
-    SDL_DetachThread(state->app_status_thread);
+    SDL_SetAtomicInt(&state->should_stop_app_status_thread, 1);
+    SDL_WaitThread(state->app_status_thread, NULL);
     audio_state_destroy(state->audio_state);
 
     curl_manager_destroy(state->curl_manager);

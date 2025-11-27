@@ -27,26 +27,26 @@ int app_state_get_window_width(AppState *state) {
 
 int check_app_status(void *data) {
     AppState *app_state = (AppState *)data;
-    while (true) {
+    while (!SDL_GetAtomicInt(&app_state->should_stop_app_status_thread)) {
 #ifdef __APPLE__
         if (is_process_running_from_list(PREMIERE_PROCESS_NAMES, NUM_PREMIERE_PROCESS_NAMES)) {
-            app_state->connected_app = APP_PREMIERE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_PREMIERE);
         } else if (is_process_running_from_list(AFTERFX_PROCESS_NAMES, NUM_AFTERFX_PROCESS_NAMES)) {
-            app_state->connected_app = APP_AE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_AE);
         } else if (is_process_running_from_list(RESOLVE_PROCESS_NAMES, NUM_RESOLVE_PROCESS_NAMES)) {
-            app_state->connected_app = APP_RESOLVE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_RESOLVE);
         } else {
-            app_state->connected_app = APP_NONE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_NONE);
         }
 #else
         if (is_process_running(PREMIERE_PROCESS_NAME)) {
-            app_state->connected_app = APP_PREMIERE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_PREMIERE);
         } else if (is_process_running(AFTERFX_PROCESS_NAME)) {
-            app_state->connected_app = APP_AE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_AE);
         } else if (is_process_running(RESOLVE_PROCESS_NAME)) {
-            app_state->connected_app = APP_RESOLVE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_RESOLVE);
         } else {
-            app_state->connected_app = APP_NONE;
+            SDL_SetAtomicInt(&app_state->connected_app, APP_NONE);
         }
 #endif
         SDL_Delay(1000); // Check every second

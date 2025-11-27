@@ -59,7 +59,8 @@ typedef struct {
 struct app_state {
   SDL_Window *window;
   char *base_path;
-  ConnectedApp connected_app;
+  SDL_AtomicInt connected_app;
+  SDL_AtomicInt should_stop_app_status_thread;
   SDL_Thread *app_status_thread;
   SDL_Surface *file_icon;
   SDL_Surface *play_icon;

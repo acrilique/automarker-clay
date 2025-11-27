@@ -128,7 +128,7 @@ void build_ui(AppState *state) {
       // empty container to push status text to the right
       CLAY_AUTO_ID({.layout.sizing = {.width = CLAY_SIZING_GROW(1)}});
 
-      switch (state->connected_app) {
+      switch ((ConnectedApp)SDL_GetAtomicInt(&state->connected_app)) {
       case APP_PREMIERE:
         CLAY_TEXT(CLAY_STRING("Premiere Pro Connected"),
                   CLAY_TEXT_CONFIG(

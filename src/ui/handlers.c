@@ -193,7 +193,7 @@ void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
         }
       }
 
-      switch (app_state->connected_app) {
+      switch ((ConnectedApp)SDL_GetAtomicInt(&app_state->connected_app)) {
       case APP_PREMIERE:
         if (premiere_pro_add_markers(app_state->curl_manager, beats_in_seconds, markers_in_selection_count) != 0) {
           app_state->modal.visible = true;
@@ -219,7 +219,7 @@ void removeMarkers(Clay_ElementId elementId,
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
-    switch (app_state->connected_app) {
+    switch ((ConnectedApp)SDL_GetAtomicInt(&app_state->connected_app)) {
     case APP_PREMIERE:
       if (premiere_pro_clear_all_markers(app_state->curl_manager) != 0) {
         app_state->modal.visible = true;
