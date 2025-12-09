@@ -479,21 +479,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
     switch (event->key.key) {
     case SDLK_SPACE:
-      handlePlayPause((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+      handle_play_pause((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
       break;
     case SDLK_F:
       if (ctrl_pressed) {
-        handleFileSelection((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+        handle_file_selection((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
       }
       break;
     case SDLK_RETURN:
       if (ctrl_pressed) {
-        sendMarkers((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+        handle_send_markers((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
       }
       break;
     case SDLK_BACKSPACE:
       if (ctrl_pressed) {
-        removeMarkers((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
+        handle_remove_markers((Clay_ElementId){0}, (Clay_PointerData){.state = CLAY_POINTER_DATA_PRESSED_THIS_FRAME}, (intptr_t)state);
       }
       break;
     }

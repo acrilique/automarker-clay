@@ -31,17 +31,17 @@ void handle_skip_version(Clay_ElementId elementId, Clay_PointerData pointerData,
 void handle_update_button(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
 
 // Button action handlers
-void handleHelp(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void handleMarkIn(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void handleMarkOut(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void removeMarkers(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void handlePlayPause(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void handleFileSelection(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_help(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_mark_in(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_mark_out(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_send_markers(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_remove_markers(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_play_pause(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_file_selection(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
 
 // Waveform interaction handlers
-void handleWaveformInteraction(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
-void handleScrollbarInteraction(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_waveform_interaction(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
+void handle_scrollbar_interaction(Clay_ElementId elementId, Clay_PointerData pointerData, intptr_t userData);
 
 // Utility function to open browser
 void handle_open_browser(const char* url);

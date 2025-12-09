@@ -75,30 +75,30 @@ static void build_header_bar(AppState *state) {
         .backgroundColor = COLOR_BG_LIGHT,
         .cornerRadius = CLAY_CORNER_RADIUS(8)}) {
     headerButton(CLAY_ID("FileButton"), CLAY_ID("FileIcon"), state->file_icon,
-                 "Open audio file (Ctrl+F)", handleFileSelection,
+                 "Open audio file (Ctrl+F)", handle_file_selection,
                  (intptr_t)state);
 
     headerButton(CLAY_ID("PlayButton"), CLAY_ID("PlayIcon"), state->play_icon,
-                 "Play/Pause (Space)", handlePlayPause, (intptr_t)state);
+                 "Play/Pause (Space)", handle_play_pause, (intptr_t)state);
 
     headerButton(CLAY_ID("SendButton"), CLAY_ID("SendIcon"), state->send_icon,
-                 "Send markers to connected app (Ctrl+Enter)", sendMarkers,
+                 "Send markers to connected app (Ctrl+Enter)", handle_send_markers,
                  (intptr_t)state);
 
     headerButton(CLAY_ID("RemoveButton"), CLAY_ID("RemoveIcon"),
                  state->remove_icon, "Remove all markers from connected app (Ctrl+Backspace)",
-                 removeMarkers, (intptr_t)state);
+                 handle_remove_markers, (intptr_t)state);
 
     headerButton(CLAY_ID("MarkInButton"), CLAY_ID("MarkInIcon"),
-                 state->mark_in_icon, "Set selection start", handleMarkIn,
+                 state->mark_in_icon, "Set selection start", handle_mark_in,
                  (intptr_t)state);
 
     headerButton(CLAY_ID("MarkOutButton"), CLAY_ID("MarkOutIcon"),
-                 state->mark_out_icon, "Set selection end", handleMarkOut,
+                 state->mark_out_icon, "Set selection end", handle_mark_out,
                  (intptr_t)state);
 
     headerButton(CLAY_ID("HelpButton"), CLAY_ID("HelpIcon"), state->help_icon,
-                 "Help", handleHelp, (intptr_t)state);
+                 "Help", handle_help, (intptr_t)state);
 
     if (state->updater_state->status == UPDATE_STATUS_AVAILABLE || state->updater_state->status == UPDATE_STATUS_DOWNLOADING) {
       static char tooltip[128];
@@ -268,13 +268,13 @@ static void build_main_content(AppState *state) {
         .cornerRadius = CLAY_CORNER_RADIUS(8),
         .custom = {.customData = &state->waveformData},
       }) {
-        Clay_OnHover(handleWaveformInteraction, (intptr_t)state);
+        Clay_OnHover(handle_waveform_interaction, (intptr_t)state);
       }
 
       // Scrollbar
       if (state->audio_state->status == STATUS_COMPLETED && state->waveform_view.zoom > 1.0f) {
           CLAY(CLAY_ID("Scrollbar"), {.layout = {.sizing = {.width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(12)}, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}}, .backgroundColor = COLOR_WAVEFORM_BG, .cornerRadius = CLAY_CORNER_RADIUS(6)}) {
-              Clay_OnHover(handleScrollbarInteraction, (intptr_t)state);
+              Clay_OnHover(handle_scrollbar_interaction, (intptr_t)state);
               float scrollbar_width = state->waveform_bbox.width;
               if (scrollbar_width > 0) {
                   float thumb_width = (scrollbar_width / state->waveform_view.zoom);

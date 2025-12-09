@@ -115,8 +115,8 @@ void handle_update_button(Clay_ElementId elementId, Clay_PointerData pointerData
     }
 }
 
-void handleHelp(Clay_ElementId elementId, Clay_PointerData pointerData,
-                intptr_t userData) {
+void handle_help(Clay_ElementId elementId, Clay_PointerData pointerData,
+                 intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
@@ -132,8 +132,8 @@ void handleHelp(Clay_ElementId elementId, Clay_PointerData pointerData,
   }
 }
 
-void handleMarkIn(Clay_ElementId elementId, Clay_PointerData pointerData,
-                  intptr_t userData) {
+void handle_mark_in(Clay_ElementId elementId, Clay_PointerData pointerData,
+                    intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
@@ -144,8 +144,8 @@ void handleMarkIn(Clay_ElementId elementId, Clay_PointerData pointerData,
   }
 }
 
-void handleMarkOut(Clay_ElementId elementId, Clay_PointerData pointerData,
-                   intptr_t userData) {
+void handle_mark_out(Clay_ElementId elementId, Clay_PointerData pointerData,
+                     intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
@@ -156,8 +156,8 @@ void handleMarkOut(Clay_ElementId elementId, Clay_PointerData pointerData,
   }
 }
 
-void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
-                 intptr_t userData) {
+void handle_send_markers(Clay_ElementId elementId, Clay_PointerData pointerData,
+                         intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
@@ -214,8 +214,8 @@ void sendMarkers(Clay_ElementId elementId, Clay_PointerData pointerData,
   }
 }
 
-void removeMarkers(Clay_ElementId elementId,
-                   Clay_PointerData pointerData, intptr_t userData) {
+void handle_remove_markers(Clay_ElementId elementId,
+                           Clay_PointerData pointerData, intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
@@ -238,9 +238,9 @@ void removeMarkers(Clay_ElementId elementId,
   }
 }
 
-void handleWaveformInteraction(Clay_ElementId elementId,
-                               Clay_PointerData pointerData,
-                               intptr_t userData) {
+void handle_waveform_interaction(Clay_ElementId elementId,
+                                 Clay_PointerData pointerData,
+                                 intptr_t userData) {
   AppState *app_state = (AppState *)userData;
   AudioState *audio_state = app_state->audio_state;
 
@@ -321,9 +321,9 @@ void handleWaveformInteraction(Clay_ElementId elementId,
   }
 }
 
-void handleScrollbarInteraction(Clay_ElementId elementId,
-                                Clay_PointerData pointerData,
-                                intptr_t userData) {
+void handle_scrollbar_interaction(Clay_ElementId elementId,
+                                  Clay_PointerData pointerData,
+                                  intptr_t userData) {
   AppState *app_state = (AppState *)userData;
   Clay_ElementData scrollbar_element = Clay_GetElementData(elementId);
   if (!scrollbar_element.found) {
@@ -360,8 +360,8 @@ void handleScrollbarInteraction(Clay_ElementId elementId,
     app_state->waveform_view.scroll = 1.0f;
 }
 
-void handlePlayPause(Clay_ElementId elementId, Clay_PointerData pointerData,
-                     intptr_t userData) {
+void handle_play_pause(Clay_ElementId elementId, Clay_PointerData pointerData,
+                       intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
@@ -386,9 +386,9 @@ void handlePlayPause(Clay_ElementId elementId, Clay_PointerData pointerData,
   }
 }
 
-void handleFileSelection(Clay_ElementId elementId,
-                         Clay_PointerData pointerData,
-                         intptr_t userData) {
+void handle_file_selection(Clay_ElementId elementId,
+                           Clay_PointerData pointerData,
+                           intptr_t userData) {
   (void)elementId;
   if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
     AppState *app_state = (AppState *)userData;
