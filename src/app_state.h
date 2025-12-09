@@ -100,6 +100,9 @@ struct app_state {
   CurlManager *curl_manager;
   UpdaterState *updater_state;
   CepInstallState cep_install_state;
+
+  // Clay memory buffer (must be freed on shutdown)
+  void *clayMemoryBuffer;
 };
 
 // Helper function to get window width

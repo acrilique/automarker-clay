@@ -133,13 +133,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
   /* Initialize Clay */
   uint64_t totalMemorySize = Clay_MinMemorySize();
-  void *clayMemoryBuffer = SDL_malloc(totalMemorySize);
-  if (!clayMemoryBuffer) {
+  state->clayMemoryBuffer = SDL_malloc(totalMemorySize);
+  if (!state->clayMemoryBuffer) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to allocate memory for Clay arena");
     return SDL_APP_FAILURE;
   }
   Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(
-      totalMemorySize, clayMemoryBuffer);
+      totalMemorySize, state->clayMemoryBuffer);
 
   int width, height;
   SDL_GetWindowSize(state->window, &width, &height);
@@ -566,6 +566,12 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
 
     if (state->rendererData.textEngine)
       TTF_DestroyRendererTextEngine(state->rendererData.textEngine);
+
+    // Free Clay memory buffer
+    if (state->clayMemoryBuffer) {
+      SDL_free(state->clayMemoryBuffer);
+      state->clayMemoryBuffer = NULL;
+    }
 
     // Free icon surfaces
     if (state->file_icon) SDL_DestroySurface(state->file_icon);
