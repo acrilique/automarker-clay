@@ -207,9 +207,18 @@ static void process_audio_file(AudioState *state) {
   if (beat_result.num_beats > 0 && beat_result.beat_times) {
     // Ensure we have enough space
     if (beat_result.num_beats > (size_t)state->beats_buffer_size) {
-      state->beats_buffer_size = beat_result.num_beats * 2;
-      state->beat_positions = SDL_realloc(state->beat_positions,
-                                     sizeof(unsigned int) * state->beats_buffer_size);
+      size_t new_buffer_size = beat_result.num_beats * 2;
+      unsigned int *new_beat_positions = SDL_realloc(state->beat_positions,
+                                     sizeof(unsigned int) * new_buffer_size);
+      if (!new_beat_positions) {
+        printf("Error: Could not reallocate beat positions buffer\n");
+        SDL_UnlockMutex(state->data_mutex);
+        free_beat_result(&beat_result);
+        free_cara_audio(cara_audio);
+        return;
+      }
+      state->beat_positions = new_beat_positions;
+      state->beats_buffer_size = new_buffer_size;
     }
 
     // Copy beat positions - CARA returns sample positions when using BEAT_UNITS_SAMPLES
