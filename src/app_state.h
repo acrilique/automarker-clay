@@ -22,7 +22,7 @@
 #include <stdbool.h>
 #include "../libs/clay/clay.h"
 #include "audio_state.h"
-#include "clay_renderer_SDL3.c"
+#include "clay_renderer_SDL3.h"
 #include "connections/curl_manager.h"
 #include "connections/premiere_pro.h"
 #include "updater.h"
