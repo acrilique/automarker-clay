@@ -76,7 +76,8 @@ void render_cep_install_section(AppState *app_state) {
         if (cep_status == CEP_INSTALL_SUCCESS) {
             CLAY_TEXT(CLAY_STRING("Extension installed successfully!"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {0, 255, 0, 255}}));
         } else if (cep_status == CEP_INSTALL_ERROR) {
-            Clay_String error_msg = { .isStaticallyAllocated = true, .length = (int32_t)strlen(app_state->cep_install_state.error_message), .chars = app_state->cep_install_state.error_message };
+            const char *err = app_state->cep_install_state.error_message ? app_state->cep_install_state.error_message : "Unknown error";
+            Clay_String error_msg = { .isStaticallyAllocated = true, .length = (int32_t)strlen(err), .chars = err };
             CLAY_TEXT(error_msg, CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {255, 0, 0, 255}}));
         }
         
