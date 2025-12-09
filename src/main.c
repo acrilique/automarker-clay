@@ -300,6 +300,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
                          event->motion.state & SDL_BUTTON_LMASK);
 
     if (state->waveform_interaction_state != INTERACTION_NONE) {
+      // printf("[DEBUG] Mouse Motion with Interaction: %d\n", state->waveform_interaction_state); // Uncomment if too verbose
       if (state->waveform_interaction_state ==
           INTERACTION_DRAGGING_SCROLLBAR) {
         float scrollbar_width = state->waveform_bbox.width;
@@ -371,12 +372,27 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
       }
     }
   } break;
-  case SDL_EVENT_MOUSE_BUTTON_UP:
+  case SDL_EVENT_MOUSE_BUTTON_UP: {
+    AppState *state = (AppState *)appstate;
     if (event->button.button == SDL_BUTTON_LEFT) {
-        AppState *state = (AppState *)appstate;
         state->waveform_interaction_state = INTERACTION_NONE;
     }
-    // Fall through to the MOUSE_BUTTON_DOWN case
+    
+    // Explicitly update Clay state
+    // We use the event position. For button state, we know THIS button is up.
+    // However, Clay_SetPointerState checks if the *primary* pointer is down.
+    // If Left button went up, pointerDown should be false.
+    // We can rely on SDL_GetMouseState to give us the current state of buttons.
+    float x, y;
+    const Uint32 button_state = SDL_GetMouseState(&x, &y);
+    // Note: SDL_GetMouseState might reflect the state *after* the event processing in some backends,
+    // but just in case, we can mask out the button that just went up if needed.
+    // Usually SDL_GetMouseState is consistent with the event stream.
+    
+    bool is_down = (button_state & SDL_BUTTON_LMASK) != 0;
+    Clay_SetPointerState((Clay_Vector2){x, y}, is_down);
+    break; 
+  }
   case SDL_EVENT_MOUSE_BUTTON_DOWN: {
     AppState *state = (AppState *)appstate;
     float x, y;
