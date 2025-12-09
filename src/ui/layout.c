@@ -164,8 +164,8 @@ static void build_tooltip(AppState *state) {
                     .width = {.top = 1, .bottom = 1, .left = 1, .right = 1}},
         .cornerRadius = CLAY_CORNER_RADIUS(4)}) {
     Clay_String tooltip_string = {.isStaticallyAllocated = true,
-                                  .length = strlen(state->tooltip_text),
-                                  .chars = state->tooltip_text};
+                                  .length = state->tooltip_text ? (int32_t)strlen(state->tooltip_text) : 0,
+                                  .chars = state->tooltip_text ? state->tooltip_text : ""};
     CLAY_TEXT(tooltip_string,
               CLAY_TEXT_CONFIG({.fontId = FONT_SMALL,
                                 .textColor = COLOR_WHITE}));
