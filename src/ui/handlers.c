@@ -254,14 +254,50 @@ void handle_waveform_interaction(Clay_ElementId elementId,
     return;
   }
 
-  float click_x = pointerData.position.x - waveform_element.boundingBox.x;
   float waveform_width = waveform_element.boundingBox.width;
+  // Guard against zero or negative width (layout not yet stabilized)
+  if (waveform_width <= 0.0f) {
+    return;
+  }
 
-  unsigned int visibleSamples = (unsigned int)(audio_state->sample->buffer_size / sizeof(float) /
-                               app_state->waveform_view.zoom);
-  unsigned int maxStartSample =
-      (audio_state->sample->buffer_size / sizeof(float)) - visibleSamples;
+  // Guard against invalid zoom values
+  float zoom = app_state->waveform_view.zoom;
+  if (zoom < 1.0f) {
+    zoom = 1.0f;
+  }
+
+  unsigned int totalSamples = (unsigned int)(audio_state->sample->buffer_size / sizeof(float));
+  if (totalSamples == 0) {
+    return;
+  }
+
+  unsigned int visibleSamples = (unsigned int)(totalSamples / zoom);
+  // Clamp visibleSamples to valid range [1, totalSamples]
+  if (visibleSamples == 0) {
+    visibleSamples = 1;
+  }
+  if (visibleSamples > totalSamples) {
+    visibleSamples = totalSamples;
+  }
+
+  // Guard against underflow: if visibleSamples >= totalSamples, no scrolling possible
+  unsigned int maxStartSample = 0;
+  if (visibleSamples < totalSamples) {
+    maxStartSample = totalSamples - visibleSamples;
+  }
   unsigned int startSample = (unsigned int)(app_state->waveform_view.scroll * maxStartSample);
+  if (startSample > maxStartSample) {
+    startSample = maxStartSample;
+  }
+
+  // Clamp click_x to [0, waveform_width] to avoid out-of-bounds sample calculation
+  float click_x = pointerData.position.x - waveform_element.boundingBox.x;
+  if (click_x < 0.0f) {
+    click_x = 0.0f;
+  }
+  if (click_x > waveform_width) {
+    click_x = waveform_width;
+  }
 
   // --- Hover detection ---
   const float hover_threshold = 5.0f; // 5 pixels tolerance
@@ -278,8 +314,7 @@ void handle_waveform_interaction(Clay_ElementId elementId,
   }
 
   float end_marker_x = -1.0f;
-  if (audio_state->selection_end <
-      (audio_state->sample->buffer_size / sizeof(float))) {
+  if (audio_state->selection_end < totalSamples) {
     if (audio_state->selection_end > startSample &&
         audio_state->selection_end <= startSample + visibleSamples) {
       end_marker_x =
@@ -296,8 +331,13 @@ void handle_waveform_interaction(Clay_ElementId elementId,
   }
 
   // --- Interaction logic ---
-  unsigned int clicked_sample =
-      startSample + (unsigned int)((click_x / waveform_width) * visibleSamples);
+  // Calculate clicked_sample with proper clamping to avoid out-of-range indices
+  float click_ratio = click_x / waveform_width;
+  unsigned int clicked_sample = startSample + (unsigned int)(click_ratio * visibleSamples);
+  // Clamp clicked_sample to valid range [0, totalSamples - 1]
+  if (clicked_sample >= totalSamples) {
+    clicked_sample = totalSamples - 1;
+  }
 
   SDL_Keymod mod_state = SDL_GetModState();
   bool ctrl_pressed = mod_state & SDL_KMOD_CTRL;
