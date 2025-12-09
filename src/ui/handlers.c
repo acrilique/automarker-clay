@@ -100,6 +100,7 @@ void handle_skip_version(Clay_ElementId elementId, Clay_PointerData pointerData,
     if (pointerData.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
         AppState *app_state = (AppState *)userData;
         strncpy(app_state->updater_state->last_ignored_version, app_state->updater_state->latest_version, sizeof(app_state->updater_state->last_ignored_version) - 1);
+        app_state->updater_state->last_ignored_version[sizeof(app_state->updater_state->last_ignored_version) - 1] = '\0';
         updater_save_config(app_state->updater_state);
         app_state->updater_state->status = UPDATE_STATUS_IDLE;
         app_state->modal.visible = false;
