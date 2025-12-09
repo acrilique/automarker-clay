@@ -567,6 +567,16 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     if (state->rendererData.textEngine)
       TTF_DestroyRendererTextEngine(state->rendererData.textEngine);
 
+    // Free icon surfaces
+    if (state->file_icon) SDL_DestroySurface(state->file_icon);
+    if (state->play_icon) SDL_DestroySurface(state->play_icon);
+    if (state->send_icon) SDL_DestroySurface(state->send_icon);
+    if (state->remove_icon) SDL_DestroySurface(state->remove_icon);
+    if (state->help_icon) SDL_DestroySurface(state->help_icon);
+    if (state->mark_in_icon) SDL_DestroySurface(state->mark_in_icon);
+    if (state->mark_out_icon) SDL_DestroySurface(state->mark_out_icon);
+    if (state->update_icon) SDL_DestroySurface(state->update_icon);
+
     SDL_free(state);
   }
 
