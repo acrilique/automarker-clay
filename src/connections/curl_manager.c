@@ -16,6 +16,7 @@
  */
 
 #include "curl_manager.h"
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,7 +48,7 @@ typedef struct {
 } RequestData;
 
 CurlManager* curl_manager_create() {
-    CurlManager *manager = (CurlManager*)malloc(sizeof(CurlManager));
+    CurlManager *manager = (CurlManager*)SDL_malloc(sizeof(CurlManager));
     if (manager) {
         manager->multi_handle = curl_multi_init();
         manager->still_running = 0;
@@ -58,12 +59,12 @@ CurlManager* curl_manager_create() {
 void curl_manager_destroy(CurlManager *manager) {
     if (manager) {
         curl_multi_cleanup(manager->multi_handle);
-        free(manager);
+        SDL_free(manager);
     }
 }
 
 void curl_manager_add_handle(CurlManager *manager, CURL *easy_handle, RequestType type, void* data) {
-    RequestData* request_data = malloc(sizeof(RequestData));
+    RequestData* request_data = SDL_malloc(sizeof(RequestData));
     request_data->type = type;
     request_data->data = data;
     curl_easy_setopt(easy_handle, CURLOPT_PRIVATE, request_data);
@@ -91,8 +92,8 @@ void curl_manager_update(CurlManager *manager) {
                     if (get_data->callback) {
                         get_data->callback(get_data->buffer, success, get_data->userdata);
                     }
-                    free(get_data->buffer);
-                    free(get_data);
+                    SDL_free(get_data->buffer);
+                    SDL_free(get_data);
                     break;
                 }
                 case REQUEST_TYPE_DOWNLOAD: {
@@ -103,22 +104,22 @@ void curl_manager_update(CurlManager *manager) {
                     if (dl_data->callback) {
                         dl_data->callback(dl_data->output_path, success, dl_data->userdata);
                     }
-                    free(dl_data);
+                    SDL_free(dl_data);
                     break;
                 }
                 case REQUEST_TYPE_JSX: {
                     JsxRequestData* jsx_data = (JsxRequestData*)request_data->data;
                     // Assuming no callback for JSX, just cleanup
                     if (jsx_data) {
-                        free(jsx_data->data);
+                        SDL_free(jsx_data->data);
                         curl_slist_free_all(jsx_data->headers);
-                        free(jsx_data);
+                        SDL_free(jsx_data);
                     }
                     break;
                 }
             }
             
-            free(request_data);
+            SDL_free(request_data);
             curl_multi_remove_handle(manager->multi_handle, easy_handle);
             curl_easy_cleanup(easy_handle);
         }
@@ -130,7 +131,7 @@ static size_t get_write_callback(void *contents, size_t size, size_t nmemb, void
     size_t realsize = size * nmemb;
     GetRequestData *mem = (GetRequestData *)userp;
 
-    char *ptr = realloc(mem->buffer, mem->size + realsize + 1);
+    char *ptr = SDL_realloc(mem->buffer, mem->size + realsize + 1);
     if(ptr == NULL) {
         /* out of memory! */ 
         printf("not enough memory (realloc returned NULL)\n");
@@ -148,8 +149,8 @@ static size_t get_write_callback(void *contents, size_t size, size_t nmemb, void
 void curl_manager_perform_get(CurlManager *manager, const char *url, void (*callback)(const char*, bool, void*), void *userdata) {
     CURL *easy_handle = curl_easy_init();
     if (easy_handle) {
-        GetRequestData *get_data = (GetRequestData*)malloc(sizeof(GetRequestData));
-        get_data->buffer = malloc(1);
+        GetRequestData *get_data = (GetRequestData*)SDL_malloc(sizeof(GetRequestData));
+        get_data->buffer = SDL_malloc(1);
         get_data->size = 0;
         get_data->callback = callback;
         get_data->userdata = userdata;
@@ -181,7 +182,7 @@ static int download_progress_callback(void *clientp, curl_off_t dltotal, curl_of
 void curl_manager_download_file(CurlManager *manager, const char *url, const char *output_path, void (*callback)(const char*, bool, void*), void (*progress_callback)(double, void*), void *userdata) {
     CURL *easy_handle = curl_easy_init();
     if (easy_handle) {
-        DownloadRequestData *dl_data = (DownloadRequestData*)malloc(sizeof(DownloadRequestData));
+        DownloadRequestData *dl_data = (DownloadRequestData*)SDL_malloc(sizeof(DownloadRequestData));
         strncpy(dl_data->output_path, output_path, sizeof(dl_data->output_path) - 1);
         dl_data->callback = callback;
         dl_data->progress_callback = progress_callback;
@@ -189,7 +190,7 @@ void curl_manager_download_file(CurlManager *manager, const char *url, const cha
         dl_data->stream = fopen(output_path, "wb");
 
         if (!dl_data->stream) {
-            free(dl_data);
+            SDL_free(dl_data);
             // TODO: Handle error
             return;
         }

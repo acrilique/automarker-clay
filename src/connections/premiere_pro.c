@@ -67,7 +67,7 @@ static int install_cep_thread(void *data) {
         SDL_SetAtomicInt(&state->status, CEP_INSTALL_SUCCESS);
     }
 
-    free(install_data);
+    SDL_free(install_data);
     return 0;
 }
 
@@ -93,7 +93,7 @@ void install_cep_extension(const char *base_path, CepInstallState *state) {
         return;
     }
 
-    CepInstallData *data = malloc(sizeof(CepInstallData));
+    CepInstallData *data = SDL_malloc(sizeof(CepInstallData));
     if (!data) {
         SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
         snprintf(state->error_message, sizeof(state->error_message), "Memory allocation failed");
@@ -110,7 +110,7 @@ void install_cep_extension(const char *base_path, CepInstallState *state) {
     if (!thread) {
         SDL_SetAtomicInt(&state->status, CEP_INSTALL_ERROR);
         snprintf(state->error_message, sizeof(state->error_message), "Failed to create thread: %s", SDL_GetError());
-        free(data);
+        SDL_free(data);
     } else {
         SDL_DetachThread(thread);
     }
@@ -123,16 +123,16 @@ static int send_jsx(CurlManager *curl_manager, const char *jsx_payload) {
         return -1;
     }
 
-    JsxRequestData *request_data = malloc(sizeof(JsxRequestData));
+    JsxRequestData *request_data = SDL_malloc(sizeof(JsxRequestData));
     if (!request_data) {
         curl_easy_cleanup(curl);
         return -1;
     }
 
     request_data->headers = curl_slist_append(NULL, "Content-Type: application/json");
-    request_data->data = malloc(4096);
+    request_data->data = SDL_malloc(4096);
     if (!request_data->data) {
-        free(request_data);
+        SDL_free(request_data);
         curl_easy_cleanup(curl);
         return -1;
     }

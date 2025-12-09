@@ -81,8 +81,13 @@ endif()
 # --- Executable Definition ---
 set(SOURCES
     src/main.c
+    src/app_state.c
     src/updater.c
     src/audio_state.c
+    src/clay_renderer_SDL3.c
+    src/ui/handlers.c
+    src/ui/components.c
+    src/ui/layout.c
     src/connections/process_utils.c
     src/connections/premiere_pro.c
     src/connections/after_effects.c
