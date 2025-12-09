@@ -42,10 +42,12 @@ void headerButton(Clay_ElementId buttonId, Clay_ElementId iconId, SDL_Surface *i
     }
 
     if (Clay_Hovered()) {
-      AppState *app_state = (AppState *)userData;
-      app_state->is_tooltip_visible = true;
-      app_state->tooltip_text = tooltip;
-      app_state->tooltip_target_id = buttonId;
+      if (userData) {
+        AppState *app_state = (AppState *)userData;
+        app_state->is_tooltip_visible = true;
+        app_state->tooltip_text = tooltip;
+        app_state->tooltip_target_id = buttonId;
+      }
     }
     CLAY(iconId, {
           .layout = {.sizing = {.width = CLAY_SIZING_FIXED(50),
