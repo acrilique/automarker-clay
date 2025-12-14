@@ -16,9 +16,12 @@ echo.
 
 echo Install Extension
 call %temp%\ExManCmd_win\ExManCmd.exe /install "%extension_path%"
-if %ERRORLEVEL% NEQ 0 (
+set EXIT_CODE=%ERRORLEVEL%
+if %EXIT_CODE% NEQ 0 (
     echo Installation failed...
 ) else (
     echo.
     echo Installation successful !
 )
+
+exit /b %EXIT_CODE%

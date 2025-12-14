@@ -26,6 +26,7 @@ hdiutil attach "$path_exman" -mountpoint $mount_path
 exmancmd="$mount_path/Contents/MacOS/ExManCmd"
 echo "Install zxp"
 "$exmancmd" --install "$path_zxp"
+EXIT_CODE=$?
 # For debugging
 # "$exmancmd" --list all
 
@@ -33,3 +34,5 @@ echo "Install zxp"
 echo "Unmount ExManCmd DMG"
 hdiutil detach "$mount_path"
 rm -rf "$tempdir"
+
+exit $EXIT_CODE
