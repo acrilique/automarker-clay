@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<nothing here>
-
 ## [2.2.0] - 2025-12-16
 
 ### Added
@@ -64,3 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Removed sliders for selecting a subset of detected beats, instead this is now done via "selection markers" which provide a way to set an in-point and out-point on the waveform. The in-point defines the 0 time in the editor timeline, from which the markers will be placed.
+
+[unreleased]: https://github.com/acrilique/automarker-clay/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/acrilique/automarker-clay/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/acrilique/automarker-clay/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/acrilique/automarker-clay/commits/v2.0.0
