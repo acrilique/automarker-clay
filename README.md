@@ -13,7 +13,7 @@ AutoMarker is a GUI application that allows users to place markers on a Premiere
 
 ## Installation
 
-AutoMarker is packaged for Windows and macOS. To obtain the latest release, go to the [releases section](https://github.com/acrilique/automarker-clay/releases). For Linux it is recommended to build the app from source.
+AutoMarker is packaged for Windows and macOS. To obtain the latest release, go to the [releases section](https://github.com/acrilique/automarker-clay/releases). Regarding Linux, an AppImage is available, but it is recommended to build the app from source. Despite that, I do not recommend using this on Linux as it is not very well tested.
 
 ## Usage
 
@@ -27,7 +27,7 @@ To use AutoMarker, follow these steps:
 
  2. If Premiere, AfterFX or Resolve is running, click the "Create markers" button to place markers on the active sequence, composition or timeline based on the audio file's tempo. 
 
- 3. You can adjust the frequency of markers and the offset for the first beat using the sliders.
+ 3. You can adjust the selection markers to define the in-point and out-point on the waveform, which sets the range for placing markers in the editor timeline. A quick way to do this is by holding the Ctrl key and clicking+dragging on the waveform.
 
  4. In some programs, your sequence/timeline needs to have a duration equal or greater than the input audio file's. For that, please place some element (video or audio clip) in the sequence/timeline before sending the markers.
 
