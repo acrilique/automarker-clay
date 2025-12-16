@@ -75,6 +75,7 @@ void render_cep_install_section(AppState *app_state) {
     } else {
         if (cep_status == CEP_INSTALL_SUCCESS) {
             CLAY_TEXT(CLAY_STRING("Extension installed successfully!"), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = {0, 255, 0, 255}}));
+            CLAY_TEXT(CLAY_STRING("If Premiere was running during the extension's installation, you'll need to restart it for the extension to be loaded."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
         } else if (cep_status == CEP_INSTALL_ERROR) {
             const char *err = app_state->cep_install_state.error_message ? app_state->cep_install_state.error_message : "Unknown error";
             Clay_String error_msg = { .isStaticallyAllocated = true, .length = (int32_t)strlen(err), .chars = err };
@@ -92,7 +93,7 @@ void render_help_modal_content(AppState *app_state) {
     CLAY_TEXT(CLAY_STRING("Options"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
     
     // CEP Section
-    CLAY_TEXT(CLAY_STRING("The CEP extension allows this app to communicate with Adobe Premiere Pro. If Premiere was running during the extension's installation, you'll need to restart it for the extension to be loaded."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    CLAY_TEXT(CLAY_STRING("The CEP extension allows this app to communicate with Adobe Premiere Pro."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
     
     render_cep_install_section(app_state);
 
@@ -162,6 +163,6 @@ void render_update_modal_content(AppState *app_state) {
 
 void render_error_modal_content(AppState *app_state) {
     CLAY_TEXT(CLAY_STRING("Connection Error"), CLAY_TEXT_CONFIG({.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
-    CLAY_TEXT(CLAY_STRING("Could not connect to Premiere Pro. Please make sure the extension is correctly installed."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
+    CLAY_TEXT(CLAY_STRING("Premiere Pro is running, but we can't connect to the HTTP server provided by the CEP extension. Either the extension is not correctly installed or there is another application using the same port (3000)."), CLAY_TEXT_CONFIG({.fontId = FONT_SMALL, .textColor = COLOR_WHITE}));
     render_cep_install_section(app_state);
 }

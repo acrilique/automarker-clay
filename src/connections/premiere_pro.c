@@ -182,3 +182,39 @@ int premiere_pro_clear_all_markers(CurlManager *curl_manager) {
 
     return send_jsx(curl_manager, jsx_payload);
 }
+
+typedef struct {
+    void (*callback)(bool healthy, void *userdata);
+    void *userdata;
+} HealthCheckData;
+
+static void health_check_callback(const char *response, bool success, void *userdata) {
+    HealthCheckData *data = (HealthCheckData *)userdata;
+    bool healthy = false;
+    
+    if (success && response) {
+        // Check if response contains "Premiere is alive"
+        healthy = (strstr(response, "Premiere is alive") != NULL);
+    }
+    
+    if (data->callback) {
+        data->callback(healthy, data->userdata);
+    }
+    
+    SDL_free(data);
+}
+
+void premiere_pro_check_health(CurlManager *curl_manager, void (*callback)(bool healthy, void *userdata), void *userdata) {
+    HealthCheckData *data = SDL_malloc(sizeof(HealthCheckData));
+    if (!data) {
+        if (callback) {
+            callback(false, userdata);
+        }
+        return;
+    }
+    
+    data->callback = callback;
+    data->userdata = userdata;
+    
+    curl_manager_perform_get(curl_manager, "http://127.0.0.1:3000", health_check_callback, data);
+}

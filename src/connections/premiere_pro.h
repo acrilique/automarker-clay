@@ -58,4 +58,15 @@ void install_cep_extension(const char *base_path, CepInstallState *state);
 int premiere_pro_add_markers(CurlManager *curl_manager, const double *beats, int num_beats);
 int premiere_pro_clear_all_markers(CurlManager *curl_manager);
 
+/**
+ * Check if the CEP panel is running and responding.
+ * Sends a GET request to http://127.0.0.1:3000 and checks if the response
+ * contains "Premiere is alive".
+ *
+ * @param curl_manager The curl manager to use for the request.
+ * @param callback Function to call with the result (true if healthy, false otherwise).
+ * @param userdata User data to pass to the callback.
+ */
+void premiere_pro_check_health(CurlManager *curl_manager, void (*callback)(bool healthy, void *userdata), void *userdata);
+
 #endif // PREMIERE_PRO_H

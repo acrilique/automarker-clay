@@ -115,23 +115,31 @@ static void build_header_bar(AppState *state) {
     CLAY_AUTO_ID({.layout.sizing = {.width = CLAY_SIZING_GROW(1)}});
 
     switch ((ConnectedApp)SDL_GetAtomicInt(&state->connected_app)) {
-    case APP_PREMIERE:
-      CLAY_TEXT(CLAY_STRING("Premiere Pro Connected"),
-                CLAY_TEXT_CONFIG(
-                    {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+    case APP_PREMIERE: {
+      CepHealthStatus health = (CepHealthStatus)SDL_GetAtomicInt(&state->cep_health_status);
+      if (health == CEP_HEALTH_OK) {
+        CLAY_TEXT(CLAY_STRING("Premiere Pro Connected"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+      } else {
+        CLAY_TEXT(CLAY_STRING("Premiere Pro Detected"),
+                  CLAY_TEXT_CONFIG(
+                      {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
+      }
       break;
+    }
     case APP_AE:
-      CLAY_TEXT(CLAY_STRING("After Effects Connected"),
+      CLAY_TEXT(CLAY_STRING("After Effects Detected"),
                 CLAY_TEXT_CONFIG(
                     {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
       break;
     case APP_RESOLVE:
-      CLAY_TEXT(CLAY_STRING("DaVinci Resolve Connected"),
+      CLAY_TEXT(CLAY_STRING("DaVinci Resolve Detected"),
                 CLAY_TEXT_CONFIG(
                     {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
       break;
     default:
-      CLAY_TEXT(CLAY_STRING("No App Connected"),
+      CLAY_TEXT(CLAY_STRING("No App Detected"),
                 CLAY_TEXT_CONFIG(
                     {.fontId = FONT_REGULAR, .textColor = COLOR_WHITE}));
       break;

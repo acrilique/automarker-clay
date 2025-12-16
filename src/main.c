@@ -34,7 +34,35 @@
 #include "ui/layout.h"
 #include "ui/handlers.h"
 #include "ui/theme.h"
+#include "ui/components.h"
 #include "connections/curl_manager.h"
+#include "connections/premiere_pro.h"
+
+// Health check retry settings
+#define CEP_HEALTH_RETRY_INTERVAL_MS 3000
+#define CEP_HEALTH_TIMEOUT_MS 30000
+
+static void cep_health_check_callback(bool healthy, void *userdata) {
+  AppState *state = (AppState *)userdata;
+  state->cep_health_last_check_time = SDL_GetTicks();
+  state->cep_health_retry_count++;
+  
+  if (healthy) {
+    SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_OK);
+  } else {
+    // Check if we've exceeded the timeout
+    Uint64 elapsed = SDL_GetTicks() - state->cep_health_first_check_time;
+    if (elapsed >= CEP_HEALTH_TIMEOUT_MS) {
+      SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_FAILED);
+      // Show error modal
+      state->modal.visible = true;
+      state->modal.render_content = render_error_modal_content;
+    } else {
+      // Wait and retry
+      SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_WAITING_RETRY);
+    }
+  }
+}
 
 static inline Clay_Dimensions SDL_MeasureText(Clay_StringSlice text,
                                               Clay_TextElementConfig *config,
@@ -274,6 +302,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   state->curl_manager = curl_manager_create();
   state->updater_state = updater_create();
   SDL_SetAtomicInt(&state->cep_install_state.status, CEP_INSTALL_IDLE);
+  SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_UNCHECKED);
+  state->cep_health_first_check_time = 0;
+  state->cep_health_last_check_time = 0;
+  state->cep_health_retry_count = 0;
 
   if (state->updater_state->check_on_startup) {
       updater_check_for_updates(state->updater_state, state->curl_manager);
@@ -511,6 +543,31 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   state->is_hovering_scrollbar_thumb = false;
 
   curl_manager_update(state->curl_manager);
+
+  // Check CEP panel health when Premiere is detected
+  ConnectedApp connected = (ConnectedApp)SDL_GetAtomicInt(&state->connected_app);
+  CepHealthStatus health_status = (CepHealthStatus)SDL_GetAtomicInt(&state->cep_health_status);
+  
+  if (connected == APP_PREMIERE) {
+    if (health_status == CEP_HEALTH_UNCHECKED) {
+      // First check - record the start time
+      state->cep_health_first_check_time = SDL_GetTicks();
+      state->cep_health_last_check_time = 0;
+      state->cep_health_retry_count = 0;
+      SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_CHECKING);
+      premiere_pro_check_health(state->curl_manager, cep_health_check_callback, state);
+    } else if (health_status == CEP_HEALTH_WAITING_RETRY) {
+      // Check if enough time has passed since last check
+      Uint64 now = SDL_GetTicks();
+      if (now - state->cep_health_last_check_time >= CEP_HEALTH_RETRY_INTERVAL_MS) {
+        SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_CHECKING);
+        premiere_pro_check_health(state->curl_manager, cep_health_check_callback, state);
+      }
+    }
+  } else if (health_status != CEP_HEALTH_UNCHECKED) {
+    // Reset health status when Premiere is no longer running
+    SDL_SetAtomicInt(&state->cep_health_status, CEP_HEALTH_UNCHECKED);
+  }
 
   Clay_BeginLayout();
 

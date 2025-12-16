@@ -40,6 +40,14 @@ typedef enum {
 } ConnectedApp;
 
 typedef enum {
+  CEP_HEALTH_UNCHECKED,
+  CEP_HEALTH_CHECKING,
+  CEP_HEALTH_WAITING_RETRY,
+  CEP_HEALTH_OK,
+  CEP_HEALTH_FAILED
+} CepHealthStatus;
+
+typedef enum {
   INTERACTION_NONE,
   INTERACTION_DRAGGING_PLAYHEAD,
   INTERACTION_DRAGGING_START_MARKER,
@@ -100,6 +108,10 @@ struct app_state {
   CurlManager *curl_manager;
   UpdaterState *updater_state;
   CepInstallState cep_install_state;
+  SDL_AtomicInt cep_health_status;
+  Uint64 cep_health_first_check_time;  // When we first detected Premiere
+  Uint64 cep_health_last_check_time;   // When we last sent a health check
+  int cep_health_retry_count;          // Number of retries attempted
 
   // Clay memory buffer (must be freed on shutdown)
   void *clayMemoryBuffer;
